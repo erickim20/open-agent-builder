@@ -13,6 +13,14 @@ import { Slider } from '@/components/ui/slider';
 import type { AgentNode, Node } from '@/types/flow';
 import { Trash2, Bot } from 'lucide-react';
 
+const EFFORT_LEVELS = [
+  { value: 1, label: 'Minimal' },
+  { value: 3, label: 'Low' },
+  { value: 5, label: 'Medium' },
+  { value: 7, label: 'High' },
+  { value: 10, label: 'Maximum' }
+] as const;
+
 interface AgentNodePanelProps {
   node: AgentNode;
   onNodeUpdate: (node: Node) => void;
@@ -41,6 +49,13 @@ export function AgentNodePanel({ node, onNodeUpdate, onNodeDelete }: AgentNodePa
 
   const isGPT5 = node.model.startsWith('gpt-5');
   const effort = node.effort ?? 5;
+  // Find closest effort level or default to Medium
+  const effortLevel =
+    EFFORT_LEVELS.find((level) => level.value === effort) ||
+    EFFORT_LEVELS.reduce((prev, curr) =>
+      Math.abs(curr.value - effort) < Math.abs(prev.value - effort) ? curr : prev
+    ) ||
+    EFFORT_LEVELS[2];
 
   return (
     <div className="space-y-4 p-4">
@@ -99,16 +114,22 @@ export function AgentNodePanel({ node, onNodeUpdate, onNodeDelete }: AgentNodePa
       </div>
       {isGPT5 ? (
         <div>
-          <Label htmlFor="agent-effort">Effort: {effort.toFixed(1)}</Label>
-          <Slider
-            id="agent-effort"
-            value={[effort]}
-            onValueChange={([value]) => handleUpdate({ effort: value })}
-            min={0}
-            max={10}
-            step={0.1}
-            className="mt-2"
-          />
+          <Label htmlFor="agent-effort">Effort</Label>
+          <Select
+            value={effortLevel.value.toString()}
+            onValueChange={(value) => handleUpdate({ effort: parseFloat(value) })}
+          >
+            <SelectTrigger id="agent-effort" className="mt-1 bg-muted">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EFFORT_LEVELS.map((level) => (
+                <SelectItem key={level.value} value={level.value.toString()}>
+                  {level.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       ) : (
         <div>
@@ -139,4 +160,3 @@ export function AgentNodePanel({ node, onNodeUpdate, onNodeDelete }: AgentNodePa
     </div>
   );
 }
-
