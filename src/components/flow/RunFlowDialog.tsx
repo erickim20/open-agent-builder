@@ -17,15 +17,6 @@ import type { Flow, AgentNode, FlowRunResult } from '@/types/flow';
 import { toast } from 'sonner';
 import { Copy } from 'lucide-react';
 
-/**
- * Checks if an agent node is connected to an end node
- */
-function isAgentConnectedToEnd(flow: Flow, agentId: string): boolean {
-  return flow.edges.some(
-    (edge) => edge.sourceNodeId === agentId && flow.nodes.some((n) => n.id === edge.targetNodeId && n.type === 'end')
-  );
-}
-
 interface RunFlowDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -79,18 +70,6 @@ export function RunFlowDialog({ open, onOpenChange, flow }: RunFlowDialogProps) 
     setRunPrompt('');
   }, [onOpenChange]);
 
-  // Filter results to only show agents connected to end nodes
-  const filteredResults = useMemo(() => {
-    if (!runResult) return null;
-    const filtered: FlowRunResult['agents'] = {};
-    Object.entries(runResult.agents).forEach(([agentId, result]) => {
-      if (isAgentConnectedToEnd(flow, agentId)) {
-        filtered[agentId] = result;
-      }
-    });
-    return Object.keys(filtered).length > 0 ? { ...runResult, agents: filtered } : null;
-  }, [runResult, flow]);
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl bg-card">
@@ -112,11 +91,11 @@ export function RunFlowDialog({ open, onOpenChange, flow }: RunFlowDialogProps) 
               placeholder="Enter your prompt here..."
             />
           </div>
-          {filteredResults && (
+          {runResult && Object.keys(runResult.agents).length > 0 && (
             <ScrollArea className="h-[500px]">
               <div className="space-y-2">
                 <Label>Results</Label>
-                {Object.entries(filteredResults.agents).map(([agentId, result]) => {
+                {Object.entries(runResult.agents).map(([agentId, result]) => {
                   const agentNode = flow.nodes.find((n) => n.id === agentId) as AgentNode;
                   return (
                     <Card key={agentId} className="bg-muted">
@@ -148,9 +127,9 @@ export function RunFlowDialog({ open, onOpenChange, flow }: RunFlowDialogProps) 
               </div>
             </ScrollArea>
           )}
-          {runResult && !filteredResults && (
+          {runResult && Object.keys(runResult.agents).length === 0 && (
             <div className="text-sm text-muted-foreground">
-              No results to display. Agents must be connected to an End node to show output.
+              No results to display.
             </div>
           )}
         </div>

@@ -29,6 +29,7 @@ interface Message {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
+  agentId?: string; // Only for assistant messages
 }
 
 interface PreviewChatPanelProps {
@@ -38,26 +39,49 @@ interface PreviewChatPanelProps {
 }
 
 /**
- * Gets all agent nodes that are connected to end nodes
+ * Finds all agent chains starting from a start node
+ * Returns an array of chains, where each chain is an array of agent IDs in order
  */
-function getConnectedAgents(flow: Flow): AgentNode[] {
+function findAgentChains(flow: Flow): string[][] {
   const startNode = flow.nodes.find((n) => n.type === 'start');
   if (!startNode) return [];
 
-  // Find agents connected to start
-  const startEdges = flow.edges.filter((e) => e.sourceNodeId === startNode.id);
-  const agentNodes = startEdges
-    .map((edge) => flow.nodes.find((n) => n.id === edge.targetNodeId))
-    .filter((n): n is AgentNode => n?.type === 'agent');
+  const chains: string[][] = [];
 
-  // Filter to only agents connected to end nodes
-  return agentNodes.filter((agentNode) => {
-    return flow.edges.some(
-      (edge) =>
-        edge.sourceNodeId === agentNode.id &&
-        flow.nodes.some((n) => n.id === edge.targetNodeId && n.type === 'end')
-    );
-  });
+  // Helper function to recursively find chains
+  function findChainsFromNode(nodeId: string, currentChain: string[]): void {
+    const outgoingEdges = flow.edges.filter((e) => e.sourceNodeId === nodeId);
+
+    for (const edge of outgoingEdges) {
+      const targetNode = flow.nodes.find((n) => n.id === edge.targetNodeId);
+      if (!targetNode) continue;
+
+      if (targetNode.type === 'agent') {
+        // Continue the chain with this agent
+        findChainsFromNode(targetNode.id, [...currentChain, targetNode.id]);
+      } else if (targetNode.type === 'end') {
+        // Chain ends here, save it if it has at least one agent
+        if (currentChain.length > 0) {
+          chains.push([...currentChain]);
+        }
+      }
+    }
+  }
+
+  // Start from the start node
+  findChainsFromNode(startNode.id, []);
+
+  return chains;
+}
+
+/**
+ * Gets all agent nodes that are the first agent in chains (for preview purposes)
+ */
+function getConnectedAgents(flow: Flow): AgentNode[] {
+  const chains = findAgentChains(flow);
+  const firstAgentIds = new Set(chains.map((chain) => chain[0]));
+
+  return flow.nodes.filter((n): n is AgentNode => n.type === 'agent' && firstAgentIds.has(n.id));
 }
 
 // Helper functions to convert between Message and ChatMessage
@@ -66,7 +90,8 @@ function messageToChatMessage(msg: Message): ChatMessage {
     id: msg.id,
     role: msg.role,
     content: msg.content,
-    timestamp: msg.timestamp.toISOString()
+    timestamp: msg.timestamp.toISOString(),
+    agentId: msg.agentId
   };
 }
 
@@ -75,7 +100,8 @@ function chatMessageToMessage(msg: ChatMessage): Message {
     id: msg.id,
     role: msg.role,
     content: msg.content,
-    timestamp: new Date(msg.timestamp)
+    timestamp: new Date(msg.timestamp),
+    agentId: msg.agentId
   };
 }
 
@@ -184,6 +210,7 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
     (historyId: string, e: React.MouseEvent) => {
       e.stopPropagation();
       e.preventDefault();
+      e.nativeEvent.stopImmediatePropagation();
       deleteChatHistoryFromStorage(flow.id, historyId);
       // Force state update by reading fresh data from storage
       const updatedHistories = getChatHistoriesFromStorage(flow.id);
@@ -194,10 +221,8 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
         // Ensure currentHistoryId is cleared if the deleted history was active
         setCurrentHistoryId((prev) => (prev === historyId ? null : prev));
       }
-      // Close dropdown after deletion to ensure it re-renders properly
-      setTimeout(() => {
-        setHistoryDropdownOpen(false);
-      }, 100);
+      // Close dropdown immediately after deletion
+      setHistoryDropdownOpen(false);
       toast.success('Chat history deleted');
     },
     [flow.id, currentHistoryId, startNewConversation]
@@ -312,7 +337,8 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
             id: assistantMessageIds[a.id],
             role: 'assistant',
             content: '',
-            timestamp: new Date()
+            timestamp: new Date(),
+            agentId: a.id
           };
         });
         setInitialResponses(responses);
@@ -327,7 +353,8 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
                 id: assistantMessageIds[a.id],
                 role: 'assistant' as const,
                 content: '',
-                timestamp: new Date()
+                timestamp: new Date(),
+                agentId: a.id
               }
             ];
           });
@@ -335,84 +362,153 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
         });
       }
 
-      // Stream to all agents in parallel
-      const agentPromises = connectedAgents.map(async (a) => {
-        try {
-          await streamAgent(a, { prompt: messageContent }, (chunk: string) => {
-            // Update the message content as chunks arrive
-            if (isInitialMessage) {
-              setInitialResponses((prev) => {
-                const current = prev[a.id];
-                if (!current) return prev;
-                return {
-                  ...prev,
-                  [a.id]: {
-                    ...current,
-                    content: current.content + chunk
-                  }
-                };
-              });
-            } else {
-              setMessages((prev) => {
-                const agentMessages = prev[a.id] || [];
-                const updatedMessages = agentMessages.map((msg) =>
-                  msg.id === assistantMessageIds[a.id]
-                    ? { ...msg, content: msg.content + chunk }
-                    : msg
-                );
-                return {
-                  ...prev,
-                  [a.id]: updatedMessages
-                };
-              });
-            }
-          });
-          // Remove agent from streaming set when done
-          setStreamingAgentIds((prev) => {
-            const updated = new Set(prev);
-            updated.delete(a.id);
-            return updated;
-          });
-          return { agentId: a.id, success: true };
-        } catch (error) {
-          const errorMessage = `Error: ${error instanceof Error ? error.message : 'Failed to get response'}`;
-          // Update the message with error
-          if (isInitialMessage) {
-            setInitialResponses((prev) => {
-              const current = prev[a.id];
-              if (!current) return prev;
-              return {
-                ...prev,
-                [a.id]: {
-                  ...current,
-                  content: errorMessage
-                }
-              };
-            });
-          } else {
+      // Stream to all chains (each chain sequentially, but chains in parallel)
+      const chains = findAgentChains(flow);
+      const chainPromises = chains.map(async (chain) => {
+        let currentInput = messageContent;
+
+        // Execute each agent in the chain sequentially
+        for (let i = 0; i < chain.length; i++) {
+          const agentId = chain[i];
+          const agent = flow.nodes.find((n) => n.id === agentId && n.type === 'agent') as AgentNode;
+          if (!agent) continue;
+
+          const isFirstAgent = i === 0;
+          const messageId = isFirstAgent ? assistantMessageIds[agentId] : crypto.randomUUID();
+
+          // Mark agent as streaming
+          setStreamingAgentIds((prev) => new Set(prev).add(agentId));
+
+          // Create message for non-first agents
+          if (!isFirstAgent) {
             setMessages((prev) => {
-              const agentMessages = prev[a.id] || [];
-              const updatedMessages = agentMessages.map((msg) =>
-                msg.id === assistantMessageIds[a.id] ? { ...msg, content: errorMessage } : msg
-              );
+              const agentMessages = prev[agentId] || [];
               return {
                 ...prev,
-                [a.id]: updatedMessages
+                [agentId]: [
+                  ...agentMessages,
+                  {
+                    id: messageId,
+                    role: 'assistant' as const,
+                    content: '',
+                    timestamp: new Date(),
+                    agentId: agentId
+                  }
+                ]
               };
             });
           }
-          // Remove agent from streaming set on error
-          setStreamingAgentIds((prev) => {
-            const updated = new Set(prev);
-            updated.delete(a.id);
-            return updated;
-          });
-          return { agentId: a.id, success: false };
+
+          try {
+            let fullOutput = '';
+            await streamAgent(agent, { prompt: currentInput }, (chunk: string) => {
+              fullOutput += chunk;
+              // Update the message content as chunks arrive
+              if (isFirstAgent) {
+                if (isInitialMessage) {
+                  setInitialResponses((prev) => {
+                    const current = prev[agentId];
+                    if (!current) return prev;
+                    return {
+                      ...prev,
+                      [agentId]: {
+                        ...current,
+                        content: current.content + chunk
+                      }
+                    };
+                  });
+                } else {
+                  setMessages((prev) => {
+                    const agentMessages = prev[agentId] || [];
+                    const updatedMessages = agentMessages.map((msg) =>
+                      msg.id === messageId ? { ...msg, content: msg.content + chunk } : msg
+                    );
+                    return {
+                      ...prev,
+                      [agentId]: updatedMessages
+                    };
+                  });
+                }
+              } else {
+                setMessages((prev) => {
+                  const agentMessages = prev[agentId] || [];
+                  const updatedMessages = agentMessages.map((msg) =>
+                    msg.id === messageId ? { ...msg, content: msg.content + chunk } : msg
+                  );
+                  return {
+                    ...prev,
+                    [agentId]: updatedMessages
+                  };
+                });
+              }
+            });
+
+            // Pass output to next agent in chain
+            currentInput = fullOutput;
+
+            // Remove agent from streaming set when done
+            setStreamingAgentIds((prev) => {
+              const updated = new Set(prev);
+              updated.delete(agentId);
+              return updated;
+            });
+          } catch (error) {
+            const errorMessage = `Error: ${error instanceof Error ? error.message : 'Failed to get response'}`;
+
+            // Update the message with error
+            if (isFirstAgent) {
+              if (isInitialMessage) {
+                setInitialResponses((prev) => {
+                  const current = prev[agentId];
+                  if (!current) return prev;
+                  return {
+                    ...prev,
+                    [agentId]: {
+                      ...current,
+                      content: errorMessage
+                    }
+                  };
+                });
+              } else {
+                setMessages((prev) => {
+                  const agentMessages = prev[agentId] || [];
+                  const updatedMessages = agentMessages.map((msg) =>
+                    msg.id === messageId ? { ...msg, content: errorMessage } : msg
+                  );
+                  return {
+                    ...prev,
+                    [agentId]: updatedMessages
+                  };
+                });
+              }
+            } else {
+              setMessages((prev) => {
+                const agentMessages = prev[agentId] || [];
+                const updatedMessages = agentMessages.map((msg) =>
+                  msg.id === messageId ? { ...msg, content: errorMessage } : msg
+                );
+                return {
+                  ...prev,
+                  [agentId]: updatedMessages
+                };
+              });
+            }
+
+            // Remove agent from streaming set on error
+            setStreamingAgentIds((prev) => {
+              const updated = new Set(prev);
+              updated.delete(agentId);
+              return updated;
+            });
+
+            // Stop chain execution on error
+            break;
+          }
         }
       });
 
       try {
-        await Promise.all(agentPromises);
+        await Promise.all(chainPromises);
       } catch {
         toast.error('Failed to get responses from some agents');
       } finally {
@@ -424,7 +520,7 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
         }, 500);
       }
     } else {
-      // This is a follow-up message - agent-specific only
+      // This is a follow-up message - execute the full chain for the selected agent
       const userMessage: Message = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -440,65 +536,101 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
       setInputValue('');
       setIsLoading(true);
 
-      // Create assistant message with empty content initially
-      const assistantMessageId = crypto.randomUUID();
-      const assistantMessage: Message = {
-        id: assistantMessageId,
-        role: 'assistant',
-        content: '',
-        timestamp: new Date()
-      };
+      // Find the chain that starts with the selected agent
+      const chains = findAgentChains(flow);
+      const chain = chains.find((c) => c[0] === selectedAgentId);
 
-      // Mark agent as streaming
-      setStreamingAgentIds((prev) => new Set(prev).add(selectedAgentId));
+      if (!chain) {
+        toast.error('No chain found for selected agent');
+        setIsLoading(false);
+        return;
+      }
 
-      setMessages((prev) => ({
-        ...prev,
-        [selectedAgentId]: [...(prev[selectedAgentId] || []), assistantMessage]
-      }));
+      let currentInput = messageContent;
 
-      try {
-        await streamAgent(agent, { prompt: messageContent }, (chunk: string) => {
-          // Update the message content as chunks arrive
+      // Execute each agent in the chain sequentially
+      for (let i = 0; i < chain.length; i++) {
+        const agentId = chain[i];
+        const chainAgent = flow.nodes.find(
+          (n) => n.id === agentId && n.type === 'agent'
+        ) as AgentNode;
+        if (!chainAgent) continue;
+
+        const isFirstAgent = i === 0;
+        const assistantMessageId = crypto.randomUUID();
+        const assistantMessage: Message = {
+          id: assistantMessageId,
+          role: 'assistant',
+          content: '',
+          timestamp: new Date(),
+          agentId: agentId
+        };
+
+        // Mark agent as streaming
+        setStreamingAgentIds((prev) => new Set(prev).add(agentId));
+
+        setMessages((prev) => ({
+          ...prev,
+          [agentId]: [...(prev[agentId] || []), assistantMessage]
+        }));
+
+        try {
+          let fullOutput = '';
+          await streamAgent(chainAgent, { prompt: currentInput }, (chunk: string) => {
+            fullOutput += chunk;
+            // Update the message content as chunks arrive
+            setMessages((prev) => {
+              const agentMessages = prev[agentId] || [];
+              const updatedMessages = agentMessages.map((msg) =>
+                msg.id === assistantMessageId ? { ...msg, content: msg.content + chunk } : msg
+              );
+              return {
+                ...prev,
+                [agentId]: updatedMessages
+              };
+            });
+          });
+
+          // Pass output to next agent in chain
+          currentInput = fullOutput;
+
+          // Remove agent from streaming set when done
+          setStreamingAgentIds((prev) => {
+            const updated = new Set(prev);
+            updated.delete(agentId);
+            return updated;
+          });
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : 'Failed to get response');
+          const errorMessage = `Error: ${error instanceof Error ? error.message : 'Failed to get response'}`;
+          // Update the message with error
           setMessages((prev) => {
-            const agentMessages = prev[selectedAgentId] || [];
+            const agentMessages = prev[agentId] || [];
             const updatedMessages = agentMessages.map((msg) =>
-              msg.id === assistantMessageId ? { ...msg, content: msg.content + chunk } : msg
+              msg.id === assistantMessageId ? { ...msg, content: errorMessage } : msg
             );
             return {
               ...prev,
-              [selectedAgentId]: updatedMessages
+              [agentId]: updatedMessages
             };
           });
-        });
-      } catch (error) {
-        toast.error(error instanceof Error ? error.message : 'Failed to get response');
-        const errorMessage = `Error: ${error instanceof Error ? error.message : 'Failed to get response'}`;
-        // Update the message with error
-        setMessages((prev) => {
-          const agentMessages = prev[selectedAgentId] || [];
-          const updatedMessages = agentMessages.map((msg) =>
-            msg.id === assistantMessageId ? { ...msg, content: errorMessage } : msg
-          );
-          return {
-            ...prev,
-            [selectedAgentId]: updatedMessages
-          };
-        });
-      } finally {
-        // Remove agent from streaming set
-        setStreamingAgentIds((prev) => {
-          const updated = new Set(prev);
-          updated.delete(selectedAgentId);
-          return updated;
-        });
-        setIsLoading(false);
-        textareaRef.current?.focus();
-        // Auto-save conversation after sending message
-        setTimeout(() => {
-          saveCurrentConversation();
-        }, 500);
+          // Remove agent from streaming set on error
+          setStreamingAgentIds((prev) => {
+            const updated = new Set(prev);
+            updated.delete(agentId);
+            return updated;
+          });
+          // Stop chain execution on error
+          break;
+        }
       }
+
+      setIsLoading(false);
+      textareaRef.current?.focus();
+      // Auto-save conversation after sending message
+      setTimeout(() => {
+        saveCurrentConversation();
+      }, 500);
     }
   }, [
     selectedAgentId,
@@ -549,18 +681,56 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
   }
 
   const selectedAgent = connectedAgents.find((a) => a.id === selectedAgentId);
-  const agentMessages = selectedAgentId ? messages[selectedAgentId] || [] : [];
-  const initialResponse = selectedAgentId ? initialResponses[selectedAgentId] : undefined;
 
-  // Combine initial message (if exists) with agent-specific messages
+  // Find the chain that contains the selected agent
+  const chains = findAgentChains(flow);
+  const selectedChain = selectedAgentId
+    ? chains.find((chain) => chain.includes(selectedAgentId))
+    : null;
+
+  // Collect messages from all agents in the chain
   const allMessages: Message[] = [];
+
   if (initialUserMessage) {
     allMessages.push(initialUserMessage);
+  }
+
+  // Collect all messages from chain agents (both initial responses and follow-ups)
+  if (selectedChain) {
+    // Collect all assistant messages from chain agents
+    const chainMessages: Array<{ message: Message; timestamp: Date }> = [];
+
+    // Add initial responses
+    for (const agentId of selectedChain) {
+      const initialResponse = initialResponses[agentId];
+      if (initialResponse) {
+        chainMessages.push({
+          message: initialResponse,
+          timestamp: initialResponse.timestamp
+        });
+      }
+    }
+
+    // Add follow-up messages
+    for (const agentId of selectedChain) {
+      const agentMessages = messages[agentId] || [];
+      agentMessages.forEach((msg) => {
+        chainMessages.push({ message: msg, timestamp: msg.timestamp });
+      });
+    }
+
+    // Sort all messages by timestamp to maintain chronological order
+    chainMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+    allMessages.push(...chainMessages.map((item) => item.message));
+  } else if (selectedAgentId) {
+    // Fallback for non-chain case
+    const initialResponse = initialResponses[selectedAgentId];
     if (initialResponse) {
       allMessages.push(initialResponse);
     }
+    const agentMessages = messages[selectedAgentId] || [];
+    allMessages.push(...agentMessages);
   }
-  allMessages.push(...agentMessages);
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg bg-card">
@@ -588,7 +758,13 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
                 {chatHistories.map((history) => (
                   <DropdownMenuItem
                     key={history.id}
-                    onClick={() => loadChatHistory(history.id)}
+                    onClick={(e) => {
+                      // Don't load history if delete button was clicked
+                      if ((e.target as HTMLElement).closest('button')) {
+                        return;
+                      }
+                      loadChatHistory(history.id);
+                    }}
                     className={cn(
                       'group flex items-center justify-between',
                       currentHistoryId === history.id && 'bg-muted'
@@ -604,6 +780,10 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
                       variant="ghost"
                       size="icon"
                       className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        e.preventDefault();
+                      }}
                       onClick={(e) => deleteChatHistory(history.id, e)}
                     >
                       <Trash2 className="h-3 w-3" />
@@ -663,17 +843,23 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
                   >
                     <div
                       className={cn(
-                        'group relative flex max-w-[80%] items-start gap-2 rounded-lg px-4 py-4',
+                        'group relative flex max-w-[80%] flex-col gap-1 rounded-lg px-4 py-4',
                         message.role === 'user'
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted text-foreground'
                       )}
                     >
+                      {message.role === 'assistant' && message.agentId && (
+                        <div className="text-xs font-medium text-muted-foreground">
+                          {flow.nodes.find((n) => n.id === message.agentId)?.label ||
+                            message.agentId}
+                        </div>
+                      )}
                       <div className="flex-1 whitespace-pre-wrap text-sm">
                         {message.content}
                         {message.role === 'assistant' &&
-                          selectedAgentId &&
-                          streamingAgentIds.has(selectedAgentId) && (
+                          selectedChain &&
+                          selectedChain.some((agentId) => streamingAgentIds.has(agentId)) && (
                             <span className="ml-0.5 inline-block h-4 w-[2px] animate-pulse bg-current align-middle" />
                           )}
                       </div>

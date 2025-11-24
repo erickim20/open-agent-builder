@@ -156,6 +156,42 @@ async function streamOpenAI(
 }
 
 /**
+ * Finds all agent chains starting from a start node
+ * Returns an array of chains, where each chain is an array of agent IDs in order
+ */
+function findAgentChains(flow: Flow): string[][] {
+  const startNode = flow.nodes.find((n) => n.type === 'start');
+  if (!startNode) return [];
+
+  const chains: string[][] = [];
+
+  // Helper function to recursively find chains
+  function findChainsFromNode(nodeId: string, currentChain: string[]): void {
+    const outgoingEdges = flow.edges.filter((e) => e.sourceNodeId === nodeId);
+    
+    for (const edge of outgoingEdges) {
+      const targetNode = flow.nodes.find((n) => n.id === edge.targetNodeId);
+      if (!targetNode) continue;
+
+      if (targetNode.type === 'agent') {
+        // Continue the chain with this agent
+        findChainsFromNode(targetNode.id, [...currentChain, targetNode.id]);
+      } else if (targetNode.type === 'end') {
+        // Chain ends here, save it if it has at least one agent
+        if (currentChain.length > 0) {
+          chains.push([...currentChain]);
+        }
+      }
+    }
+  }
+
+  // Start from the start node
+  findChainsFromNode(startNode.id, []);
+
+  return chains;
+}
+
+/**
  * Validates a flow structure
  */
 export function validateFlow(flow: Flow): { valid: boolean; error?: string } {
@@ -172,21 +208,12 @@ export function validateFlow(flow: Flow): { valid: boolean; error?: string } {
     return { valid: false, error: 'Flow must have at least one Agent node' };
   }
 
-  // Check that all agents are reachable from start
-  const startNode = startNodes[0];
-  const reachableAgentIds = new Set<string>();
-  const startEdges = flow.edges.filter((e) => e.sourceNodeId === startNode.id);
-  startEdges.forEach((edge) => {
-    const targetNode = flow.nodes.find((n) => n.id === edge.targetNodeId);
-    if (targetNode?.type === 'agent') {
-      reachableAgentIds.add(targetNode.id);
-    }
-  });
-
-  if (reachableAgentIds.size === 0) {
+  // Check that at least one agent chain exists from start to end
+  const chains = findAgentChains(flow);
+  if (chains.length === 0) {
     return {
       valid: false,
-      error: 'At least one Agent node must be connected to the Start node'
+      error: 'At least one agent chain must exist from Start to End node'
     };
   }
 
@@ -194,18 +221,8 @@ export function validateFlow(flow: Flow): { valid: boolean; error?: string } {
 }
 
 /**
- * Checks if an agent node is connected to an end node
- */
-function isAgentConnectedToEnd(flow: Flow, agentId: string): boolean {
-  return flow.edges.some(
-    (edge) =>
-      edge.sourceNodeId === agentId &&
-      flow.nodes.some((n) => n.id === edge.targetNodeId && n.type === 'end')
-  );
-}
-
-/**
  * Executes a flow with the given input
+ * Executes agent chains sequentially, passing output from one agent to the next
  */
 export async function runFlow(flow: Flow, input: { prompt: string }): Promise<FlowRunResult> {
   const validation = validateFlow(flow);
@@ -218,58 +235,56 @@ export async function runFlow(flow: Flow, input: { prompt: string }): Promise<Fl
     throw new Error('Start node not found');
   }
 
-  // Find all agents connected directly to start
-  const startEdges = flow.edges.filter((e) => e.sourceNodeId === startNode.id);
-  const allAgentNodes = startEdges
-    .map((edge) => flow.nodes.find((n) => n.id === edge.targetNodeId))
-    .filter((n): n is AgentNode => n?.type === 'agent');
+  // Find all agent chains
+  const chains = findAgentChains(flow);
 
-  // Only execute agents that are connected to end nodes
-  const agentNodes = allAgentNodes.filter((agentNode) => isAgentConnectedToEnd(flow, agentNode.id));
-
-  if (agentNodes.length === 0) {
-    throw new Error('No agent nodes connected to start and end nodes');
+  if (chains.length === 0) {
+    throw new Error('No agent chains found from start to end nodes');
   }
 
-  // Execute all agents in parallel
   const runId = crypto.randomUUID();
-  const agentPromises = agentNodes.map(async (agentNode) => {
-    try {
-      const output = await callOpenAI(
-        agentNode.model,
-        agentNode.systemPrompt,
-        input.prompt,
-        agentNode.temperature,
-        agentNode.maxTokens
-      );
+  const agents: Record<string, AgentRunResult> = {};
 
-      return {
-        agentId: agentNode.id,
-        result: {
+  // Execute each chain sequentially
+  for (const chain of chains) {
+    let currentInput = input.prompt;
+
+    // Execute each agent in the chain sequentially
+    for (const agentId of chain) {
+      const agentNode = flow.nodes.find((n) => n.id === agentId && n.type === 'agent') as AgentNode;
+      if (!agentNode) continue;
+
+      try {
+        const output = await callOpenAI(
+          agentNode.model,
+          agentNode.systemPrompt,
+          currentInput,
+          agentNode.temperature,
+          agentNode.maxTokens
+        );
+
+        agents[agentId] = {
           output,
           raw: {
             providerResponse: output
           }
-        }
-      };
-    } catch (error) {
-      return {
-        agentId: agentNode.id,
-        result: {
-          output: `Error: ${error instanceof Error ? error.message : String(error)}`,
+        };
+
+        // Pass output to next agent in chain
+        currentInput = output;
+      } catch (error) {
+        const errorMessage = `Error: ${error instanceof Error ? error.message : String(error)}`;
+        agents[agentId] = {
+          output: errorMessage,
           raw: {
             error: error instanceof Error ? error.message : String(error)
           }
-        }
-      };
+        };
+        // Stop chain execution on error
+        break;
+      }
     }
-  });
-
-  const results = await Promise.all(agentPromises);
-  const agents: Record<string, AgentRunResult> = {};
-  results.forEach(({ agentId, result }) => {
-    agents[agentId] = result;
-  });
+  }
 
   return {
     runId,

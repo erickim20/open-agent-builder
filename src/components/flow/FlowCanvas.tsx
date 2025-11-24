@@ -137,14 +137,36 @@ export function FlowCanvas({
         return;
       }
 
-      // Only allow: start -> agent, agent -> end
+      // Prevent connections to start nodes
+      if (targetNode.type === 'start') {
+        toast.error('Cannot connect to Start nodes');
+        return;
+      }
+
+      // Prevent connections from end nodes
+      if (sourceNode.type === 'end') {
+        toast.error('Cannot connect from End nodes');
+        return;
+      }
+
+      // If connecting to an agent node, check that it doesn't already have an input
+      if (targetNode.type === 'agent') {
+        const existingInputEdges = flow.edges.filter((e) => e.targetNodeId === targetNode.id);
+        if (existingInputEdges.length > 0) {
+          toast.error('Agent nodes can only have one input connection');
+          return;
+        }
+      }
+
+      // Allow: start -> agent, agent -> agent, agent -> end
       const isValidConnection =
         (sourceNode.type === 'start' && targetNode.type === 'agent') ||
+        (sourceNode.type === 'agent' && targetNode.type === 'agent') ||
         (sourceNode.type === 'agent' && targetNode.type === 'end');
 
       if (!isValidConnection) {
         toast.error(
-          `Invalid connection: ${sourceNode.type} → ${targetNode.type}. Only Start → Agent and Agent → End connections are allowed.`
+          `Invalid connection: ${sourceNode.type} → ${targetNode.type}. Allowed connections: Start → Agent, Agent → Agent, Agent → End.`
         );
         return;
       }

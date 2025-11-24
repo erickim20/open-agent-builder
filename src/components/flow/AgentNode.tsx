@@ -19,9 +19,7 @@ export function AgentNode({ data, selected }: AgentNodeProps) {
         isStreaming && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
       )}
     >
-      {isStreaming && (
-        <div className="absolute inset-0 rounded-xl bg-primary/20 animate-pulse" />
-      )}
+      {isStreaming && <div className="absolute inset-0 animate-pulse rounded-xl bg-primary/20" />}
       <div className="relative flex items-center gap-2">
         <div
           className={cn(
@@ -32,7 +30,7 @@ export function AgentNode({ data, selected }: AgentNodeProps) {
           <Bot
             className={cn(
               'h-4 w-4 transition-colors',
-              isStreaming ? 'text-primary animate-pulse' : 'text-accent'
+              isStreaming ? 'animate-pulse text-primary' : 'text-accent'
             )}
           />
         </div>
