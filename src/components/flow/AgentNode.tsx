@@ -10,11 +10,31 @@ interface AgentNodeProps {
 
 export function AgentNode({ data, selected }: AgentNodeProps) {
   const nodeData = data as AgentNodeType;
+  const isStreaming = (data as Record<string, unknown>).isStreaming === true;
   return (
-    <div className={cn('rounded-xl bg-card p-2', selected && 'ring')}>
-      <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10">
-          <Bot className="h-4 w-4 text-accent" />
+    <div
+      className={cn(
+        'relative rounded-xl bg-card p-2 transition-all',
+        selected && 'ring',
+        isStreaming && 'ring-2 ring-primary ring-offset-2 ring-offset-background'
+      )}
+    >
+      {isStreaming && (
+        <div className="absolute inset-0 rounded-xl bg-primary/20 animate-pulse" />
+      )}
+      <div className="relative flex items-center gap-2">
+        <div
+          className={cn(
+            'flex h-8 w-8 items-center justify-center rounded-lg transition-colors',
+            isStreaming ? 'bg-primary/20' : 'bg-accent/10'
+          )}
+        >
+          <Bot
+            className={cn(
+              'h-4 w-4 transition-colors',
+              isStreaming ? 'text-primary animate-pulse' : 'text-accent'
+            )}
+          />
         </div>
         <div className="flex-1 pr-2">
           <div className="text-sm font-semibold">{nodeData.label}</div>

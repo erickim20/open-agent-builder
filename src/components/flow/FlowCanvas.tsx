@@ -20,6 +20,7 @@ interface FlowCanvasProps {
   selectedNodeId?: string | null;
   onNodeUpdate?: (node: Node) => void;
   previewMode?: boolean;
+  streamingAgentIds?: Set<string>;
 }
 
 export function FlowCanvas({
@@ -28,7 +29,8 @@ export function FlowCanvas({
   onNodeSelect,
   selectedNodeId,
   onNodeUpdate,
-  previewMode = false
+  previewMode = false,
+  streamingAgentIds = new Set()
 }: FlowCanvasProps) {
   // Convert Flow nodes/edges to ReactFlow format
   const initialNodes: ReactFlowNode[] = useMemo(
@@ -41,7 +43,8 @@ export function FlowCanvas({
           ...node,
           onNodeUpdate,
           onNodeSelect,
-          previewMode
+          previewMode,
+          isStreaming: node.type === 'agent' && streamingAgentIds.has(node.id)
         } as unknown as Record<string, unknown>,
         selected: node.id === selectedNodeId,
         style: previewMode
@@ -51,7 +54,7 @@ export function FlowCanvas({
             }
           : undefined
       })),
-    [flow.nodes, selectedNodeId, onNodeUpdate, onNodeSelect, previewMode]
+    [flow.nodes, selectedNodeId, onNodeUpdate, onNodeSelect, previewMode, streamingAgentIds]
   );
 
   const initialEdges: Edge[] = useMemo(
@@ -78,7 +81,8 @@ export function FlowCanvas({
           ...node,
           onNodeUpdate,
           onNodeSelect,
-          previewMode
+          previewMode,
+          isStreaming: node.type === 'agent' && streamingAgentIds.has(node.id)
         } as unknown as Record<string, unknown>,
         selected: node.id === selectedNodeId,
         style: previewMode
@@ -90,18 +94,32 @@ export function FlowCanvas({
       }))
     );
     setEdges(
-      flow.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.sourceNodeId,
-        target: edge.targetNodeId,
-        style: previewMode
-          ? {
-              opacity: 0.3
-            }
-          : undefined
-      }))
+      flow.edges.map((edge) => {
+        const sourceNode = flow.nodes.find((n) => n.id === edge.sourceNodeId);
+        const targetNode = flow.nodes.find((n) => n.id === edge.targetNodeId);
+        const isStreaming =
+          (sourceNode?.type === 'agent' && streamingAgentIds.has(edge.sourceNodeId)) ||
+          (targetNode?.type === 'agent' && streamingAgentIds.has(edge.targetNodeId));
+
+        return {
+          id: edge.id,
+          source: edge.sourceNodeId,
+          target: edge.targetNodeId,
+          style: previewMode
+            ? {
+                opacity: 0.3
+              }
+            : isStreaming
+              ? {
+                  stroke: 'hsl(var(--primary))',
+                  strokeWidth: 2.5
+                }
+              : undefined,
+          animated: isStreaming
+        };
+      })
     );
-  }, [flow, selectedNodeId, setNodes, setEdges, onNodeUpdate, onNodeSelect, previewMode]);
+  }, [flow, selectedNodeId, setNodes, setEdges, onNodeUpdate, onNodeSelect, previewMode, streamingAgentIds]);
 
   const onConnect = useCallback(
     (params: Connection) => {

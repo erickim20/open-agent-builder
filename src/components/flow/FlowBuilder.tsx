@@ -55,6 +55,7 @@ export function FlowBuilder() {
   const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+  const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set());
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -282,6 +283,7 @@ export function FlowBuilder() {
             selectedNodeId={selectedNodeId}
             onNodeUpdate={handleNodeUpdate}
             previewMode={mode === 'preview'}
+            streamingAgentIds={streamingAgentIds}
           />
         </div>
 
@@ -316,7 +318,11 @@ export function FlowBuilder() {
         ) : (
           /* Preview chat panel */
           <div className="absolute bottom-4 right-4 top-4 w-96 rounded-xl bg-card shadow-lg">
-            <PreviewChatPanel flow={flow} onNodeSelect={handleNodeSelect} />
+            <PreviewChatPanel
+              flow={flow}
+              onNodeSelect={handleNodeSelect}
+              onStreamingAgentsChange={setStreamingAgentIds}
+            />
           </div>
         )}
       </div>

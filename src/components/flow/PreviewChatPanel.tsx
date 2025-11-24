@@ -27,6 +27,7 @@ interface Message {
 interface PreviewChatPanelProps {
   flow: Flow;
   onNodeSelect: (nodeId: string | null) => void;
+  onStreamingAgentsChange?: (agentIds: Set<string>) => void;
 }
 
 /**
@@ -52,7 +53,7 @@ function getConnectedAgents(flow: Flow): AgentNode[] {
   });
 }
 
-export function PreviewChatPanel({ flow }: PreviewChatPanelProps) {
+export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatPanelProps) {
   const connectedAgents = useMemo(() => getConnectedAgents(flow), [flow]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(
     connectedAgents.length > 0 ? connectedAgents[0].id : null
@@ -70,6 +71,11 @@ export function PreviewChatPanel({ flow }: PreviewChatPanelProps) {
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set());
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Notify parent of streaming agents changes
+  useEffect(() => {
+    onStreamingAgentsChange?.(streamingAgentIds);
+  }, [streamingAgentIds, onStreamingAgentsChange]);
 
   // Auto-scroll to bottom when new messages arrive (including during streaming)
   useEffect(() => {
