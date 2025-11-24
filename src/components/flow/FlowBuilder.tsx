@@ -6,6 +6,9 @@ import { FlowSwitcher } from './FlowSwitcher';
 import { RunFlowDialog } from './RunFlowDialog';
 import { ImportFlowDialog } from './ImportFlowDialog';
 import { ApiKeyDialog } from './ApiKeyDialog';
+import { AgentNodeCard } from './cards/AgentNodeCard';
+import { EndNodeCard } from './cards/EndNodeCard';
+import { NotesNodeCard } from './cards/NotesNodeCard';
 import {
   saveFlowToStorage,
   getCurrentFlowFromStorage,
@@ -13,9 +16,9 @@ import {
   deleteFlowFromStorage,
   exportFlowAsJSON
 } from '@/lib/flowStorage';
-import type { Flow, Node, AgentNode, EndNode } from '@/types/flow';
+import type { Flow, Node, AgentNode, EndNode, NotesNode } from '@/types/flow';
 import { toast } from 'sonner';
-import { Play, BotIcon, SquareIcon, MoreHorizontal, Key } from 'lucide-react';
+import { Play, MoreHorizontal, Key } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -138,6 +141,24 @@ export function FlowBuilder() {
     });
   }, [flow]);
 
+  const handleAddNotes = useCallback(() => {
+    const newNotes: NotesNode = {
+      id: `notes-${crypto.randomUUID()}`,
+      type: 'notes',
+      label: 'Note',
+      position: {
+        x: Math.random() * 400 + 100,
+        y: Math.random() * 300 + 200
+      },
+      content: ''
+    };
+
+    setFlow({
+      ...flow,
+      nodes: [...flow.nodes, newNotes]
+    });
+  }, [flow]);
+
   const handleExport = useCallback(() => {
     try {
       exportFlowAsJSON(flow);
@@ -211,12 +232,13 @@ export function FlowBuilder() {
               size="sm"
               onClick={() => setApiKeyDialogOpen(true)}
               title="OpenAI API Key Settings"
+              className="h-9 w-9"
             >
               <Key className="h-4 w-4" />
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger>
-                <Button variant="secondary" size="sm">
+                <Button variant="secondary" size="sm" className="h-9 w-9">
                   <MoreHorizontal className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
@@ -231,7 +253,7 @@ export function FlowBuilder() {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <Button onClick={() => setRunDialogOpen(true)} size="sm">
+            <Button onClick={() => setRunDialogOpen(true)} size="sm" className="h-9 w-9">
               <Play className="h-4 w-4" />
             </Button>
           </div>
@@ -247,31 +269,21 @@ export function FlowBuilder() {
             onFlowChange={handleFlowChange}
             onNodeSelect={setSelectedNodeId}
             selectedNodeId={selectedNodeId}
+            onNodeUpdate={handleNodeUpdate}
           />
         </div>
 
+        {/* Node types card */}
         <div className="absolute left-4 top-4 w-80 overflow-y-auto rounded-xl bg-card">
           <div className="p-2">
             <h2 className="p-2 text-sm font-medium text-muted-foreground">Core</h2>
             <div className="space-y-2">
-              <div
-                onClick={handleAddAgent}
-                className="flex w-full items-center gap-2 rounded-xl p-2 transition-colors hover:bg-muted"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <BotIcon className="h-4 w-4 text-primary" />
-                </div>
-                Agent
-              </div>
-              <div
-                onClick={handleAddEnd}
-                className="flex w-full items-center gap-2 rounded-xl p-2 transition-colors hover:bg-muted"
-              >
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                  <SquareIcon className="h-4 w-4 text-primary" />
-                </div>
-                End
-              </div>
+              <AgentNodeCard onClick={handleAddAgent} />
+              <EndNodeCard onClick={handleAddEnd} />
+            </div>
+            <h2 className="p-2 pt-4 text-sm font-medium text-muted-foreground">Tools</h2>
+            <div className="space-y-2">
+              <NotesNodeCard onClick={handleAddNotes} />
             </div>
           </div>
         </div>

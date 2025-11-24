@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import {
   ReactFlow,
-  Background,
-  Controls,
-  MiniMap,
   useNodesState,
   useEdgesState,
   Connection,
@@ -21,9 +18,16 @@ interface FlowCanvasProps {
   onFlowChange: (flow: Flow) => void;
   onNodeSelect?: (nodeId: string | null) => void;
   selectedNodeId?: string | null;
+  onNodeUpdate?: (node: Node) => void;
 }
 
-export function FlowCanvas({ flow, onFlowChange, onNodeSelect, selectedNodeId }: FlowCanvasProps) {
+export function FlowCanvas({
+  flow,
+  onFlowChange,
+  onNodeSelect,
+  selectedNodeId,
+  onNodeUpdate
+}: FlowCanvasProps) {
   // Convert Flow nodes/edges to ReactFlow format
   const initialNodes: ReactFlowNode[] = useMemo(
     () =>
@@ -31,10 +35,14 @@ export function FlowCanvas({ flow, onFlowChange, onNodeSelect, selectedNodeId }:
         id: node.id,
         type: node.type,
         position: node.position,
-        data: node as unknown as Record<string, unknown>,
+        data: {
+          ...node,
+          onNodeUpdate,
+          onNodeSelect
+        } as unknown as Record<string, unknown>,
         selected: node.id === selectedNodeId
       })),
-    [flow.nodes, selectedNodeId]
+    [flow.nodes, selectedNodeId, onNodeUpdate, onNodeSelect]
   );
 
   const initialEdges: Edge[] = useMemo(
@@ -57,7 +65,11 @@ export function FlowCanvas({ flow, onFlowChange, onNodeSelect, selectedNodeId }:
         id: node.id,
         type: node.type,
         position: node.position,
-        data: node as unknown as Record<string, unknown>,
+        data: {
+          ...node,
+          onNodeUpdate,
+          onNodeSelect
+        } as unknown as Record<string, unknown>,
         selected: node.id === selectedNodeId
       }))
     );
@@ -68,7 +80,7 @@ export function FlowCanvas({ flow, onFlowChange, onNodeSelect, selectedNodeId }:
         target: edge.targetNodeId
       }))
     );
-  }, [flow, selectedNodeId, setNodes, setEdges]);
+  }, [flow, selectedNodeId, setNodes, setEdges, onNodeUpdate, onNodeSelect]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -79,6 +91,12 @@ export function FlowCanvas({ flow, onFlowChange, onNodeSelect, selectedNodeId }:
       const targetNode = flow.nodes.find((n) => n.id === params.target);
 
       if (!sourceNode || !targetNode) return;
+
+      // Prevent connections to/from notes nodes
+      if (sourceNode.type === 'notes' || targetNode.type === 'notes') {
+        toast.error('Notes nodes cannot be connected to other nodes');
+        return;
+      }
 
       // Only allow: start -> agent, agent -> end
       const isValidConnection =

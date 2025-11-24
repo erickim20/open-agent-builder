@@ -13,8 +13,8 @@ export function AgentNode({ data, selected }: AgentNodeProps) {
   return (
     <div className={cn('rounded-xl bg-card p-2', selected && 'ring')}>
       <div className="flex items-center gap-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-          <Bot className="h-4 w-4 text-primary" />
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/10">
+          <Bot className="h-4 w-4 text-accent" />
         </div>
         <div className="flex-1 pr-2">
           <div className="text-sm font-semibold">{nodeData.label}</div>
