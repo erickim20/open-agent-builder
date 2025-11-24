@@ -9,13 +9,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { streamAgent } from '@/lib/runtime';
 import type { Flow, AgentNode } from '@/types/flow';
-import { Send, ChevronDown, Copy, Check, BotIcon } from 'lucide-react';
+import { Send, ChevronDown, Copy, Check, BotIcon, History, Trash2, PlusIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
 import { Switch } from '../ui/switch';
 import { Label } from '../ui/label';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
+import {
+  getChatHistoriesFromStorage,
+  saveChatHistoryToStorage,
+  deleteChatHistoryFromStorage,
+  type ChatHistory,
+  type ChatMessage
+} from '@/lib/flowStorage';
 
 interface Message {
   id: string;
@@ -53,6 +60,25 @@ function getConnectedAgents(flow: Flow): AgentNode[] {
   });
 }
 
+// Helper functions to convert between Message and ChatMessage
+function messageToChatMessage(msg: Message): ChatMessage {
+  return {
+    id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    timestamp: msg.timestamp.toISOString()
+  };
+}
+
+function chatMessageToMessage(msg: ChatMessage): Message {
+  return {
+    id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    timestamp: new Date(msg.timestamp)
+  };
+}
+
 export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatPanelProps) {
   const connectedAgents = useMemo(() => getConnectedAgents(flow), [flow]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(
@@ -69,8 +95,113 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
   const [sendToAllAgents, setSendToAllAgents] = useState(true);
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set());
+  const [chatHistories, setChatHistories] = useState<ChatHistory[]>([]);
+  const [currentHistoryId, setCurrentHistoryId] = useState<string | null>(null);
+  const [historyDropdownOpen, setHistoryDropdownOpen] = useState(false);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load chat histories for this flow
+  useEffect(() => {
+    const histories = getChatHistoriesFromStorage(flow.id);
+    setChatHistories(histories);
+  }, [flow.id]);
+
+  // Save current conversation as history when it has content
+  const saveCurrentConversation = useCallback(() => {
+    if (!initialUserMessage && Object.keys(messages).length === 0) {
+      return; // Nothing to save
+    }
+
+    const historyId = currentHistoryId || crypto.randomUUID();
+    const historyName =
+      initialUserMessage?.content.slice(0, 50) || `Chat ${new Date().toLocaleDateString()}`;
+
+    const history: ChatHistory = {
+      id: historyId,
+      flowId: flow.id,
+      name: historyName,
+      initialUserMessage: initialUserMessage ? messageToChatMessage(initialUserMessage) : null,
+      initialResponses: Object.fromEntries(
+        Object.entries(initialResponses).map(([key, msg]) => [key, messageToChatMessage(msg)])
+      ),
+      messages: Object.fromEntries(
+        Object.entries(messages).map(([key, msgs]) => [key, msgs.map(messageToChatMessage)])
+      ),
+      createdAt: currentHistoryId
+        ? chatHistories.find((h) => h.id === currentHistoryId)?.createdAt ||
+          new Date().toISOString()
+        : new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    saveChatHistoryToStorage(history);
+    setChatHistories(getChatHistoriesFromStorage(flow.id));
+    setCurrentHistoryId(historyId);
+  }, [flow.id, initialUserMessage, initialResponses, messages, currentHistoryId, chatHistories]);
+
+  // Load a chat history
+  const loadChatHistory = useCallback(
+    (historyId: string) => {
+      const history = chatHistories.find((h) => h.id === historyId);
+      if (!history) return;
+
+      setInitialUserMessage(
+        history.initialUserMessage ? chatMessageToMessage(history.initialUserMessage) : null
+      );
+      setInitialResponses(
+        Object.fromEntries(
+          Object.entries(history.initialResponses).map(([key, msg]) => [
+            key,
+            chatMessageToMessage(msg)
+          ])
+        )
+      );
+      setMessages(
+        Object.fromEntries(
+          Object.entries(history.messages).map(([key, msgs]) => [
+            key,
+            msgs.map(chatMessageToMessage)
+          ])
+        )
+      );
+      setCurrentHistoryId(historyId);
+    },
+    [chatHistories]
+  );
+
+  // Start a new conversation
+  const startNewConversation = useCallback(() => {
+    saveCurrentConversation(); // Save current before starting new
+    setInitialUserMessage(null);
+    setInitialResponses({});
+    setMessages({});
+    setCurrentHistoryId(null);
+  }, [saveCurrentConversation]);
+
+  // Delete a chat history
+  const deleteChatHistory = useCallback(
+    (historyId: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      deleteChatHistoryFromStorage(flow.id, historyId);
+      // Force state update by reading fresh data from storage
+      const updatedHistories = getChatHistoriesFromStorage(flow.id);
+      setChatHistories(updatedHistories); // Update state with fresh data
+      if (currentHistoryId === historyId) {
+        startNewConversation();
+      } else {
+        // Ensure currentHistoryId is cleared if the deleted history was active
+        setCurrentHistoryId((prev) => (prev === historyId ? null : prev));
+      }
+      // Close dropdown after deletion to ensure it re-renders properly
+      setTimeout(() => {
+        setHistoryDropdownOpen(false);
+      }, 100);
+      toast.success('Chat history deleted');
+    },
+    [flow.id, currentHistoryId, startNewConversation]
+  );
 
   // Notify parent of streaming agents changes
   useEffect(() => {
@@ -109,6 +240,25 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
 
     const messageContent = inputValue.trim();
     const isInitialMessage = initialUserMessage === null;
+
+    // Create a new history entry if this is the first message and no history is selected
+    if (isInitialMessage && !currentHistoryId) {
+      const newHistoryId = crypto.randomUUID();
+      const historyName = messageContent.slice(0, 50) || `Chat ${new Date().toLocaleDateString()}`;
+      const newHistory: ChatHistory = {
+        id: newHistoryId,
+        flowId: flow.id,
+        name: historyName,
+        initialUserMessage: null,
+        initialResponses: {},
+        messages: {},
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+      saveChatHistoryToStorage(newHistory);
+      setChatHistories(getChatHistoriesFromStorage(flow.id));
+      setCurrentHistoryId(newHistoryId);
+    }
 
     if (sendToAllAgents) {
       // User wants to send to all agents
@@ -268,6 +418,10 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
       } finally {
         setIsLoading(false);
         textareaRef.current?.focus();
+        // Auto-save conversation after sending message
+        setTimeout(() => {
+          saveCurrentConversation();
+        }, 500);
       }
     } else {
       // This is a follow-up message - agent-specific only
@@ -340,6 +494,10 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
         });
         setIsLoading(false);
         textareaRef.current?.focus();
+        // Auto-save conversation after sending message
+        setTimeout(() => {
+          saveCurrentConversation();
+        }, 500);
       }
     }
   }, [
@@ -348,7 +506,10 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
     isLoading,
     connectedAgents,
     initialUserMessage,
-    sendToAllAgents
+    sendToAllAgents,
+    saveCurrentConversation,
+    currentHistoryId,
+    flow.id
   ]);
 
   const handleKeyDown = useCallback(
@@ -403,8 +564,56 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg bg-card">
-      <div className="flex items-center p-2">
-        <div>{/* History dropdown */}</div>
+      <div className="flex items-center gap-2 p-2">
+        <DropdownMenu open={historyDropdownOpen} onOpenChange={setHistoryDropdownOpen}>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" size="sm" className="justify-start gap-2">
+              <History className="h-4 w-4" />
+              <span className="max-w-[120px] truncate">
+                {currentHistoryId
+                  ? chatHistories.find((h) => h.id === currentHistoryId)?.name || 'New Chat'
+                  : 'New Chat'}
+              </span>
+              <ChevronDown className="h-4 w-4 opacity-50" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-64" key={chatHistories.length}>
+            <DropdownMenuItem onClick={startNewConversation}>
+              <PlusIcon className="h-4 w-4" />
+              <span className="font-medium">New Chat</span>
+            </DropdownMenuItem>
+            {chatHistories.length > 0 && (
+              <>
+                <div className="my-1 h-px bg-border" />
+                {chatHistories.map((history) => (
+                  <DropdownMenuItem
+                    key={history.id}
+                    onClick={() => loadChatHistory(history.id)}
+                    className={cn(
+                      'group flex items-center justify-between',
+                      currentHistoryId === history.id && 'bg-muted'
+                    )}
+                  >
+                    <div className="flex min-w-0 flex-1 items-center gap-2">
+                      <div className="truncate text-sm font-medium">{history.name}</div>
+                      <div className="text-sm font-medium text-muted-foreground">
+                        {new Date(history.updatedAt).toLocaleDateString()}
+                      </div>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                      onClick={(e) => deleteChatHistory(history.id, e)}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </DropdownMenuItem>
+                ))}
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
