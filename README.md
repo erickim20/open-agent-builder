@@ -2,9 +2,10 @@
 
 A visual, no-code flow builder for creating and executing AI agent workflows. Build complex agent chains with an intuitive drag-and-drop interface, configure agent nodes with custom prompts and models, and execute flows seamlessly.
 
-## 🌐 Live Demo
+## 🔗 Links
 
-Try Open Agent Builder online: **[agent.raumlabs.com](https://agent.raumlabs.com)**
+- **Live Demo**: [agent.raumlabs.com](https://agent.raumlabs.com)
+- **GitHub Repository**: [github.com/erickim20/open-agent-builder](https://github.com/erickim20/open-agent-builder.git)
 
 ## ✨ Features
 
