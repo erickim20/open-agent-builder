@@ -20,6 +20,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
         error: <OctagonX className="h-4 w-4" />,
         loading: <LoaderCircle className="h-4 w-4 animate-spin" />
       }}
+      position="bottom-center"
       toastOptions={{
         classNames: {
           toast:
