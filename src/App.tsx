@@ -1,6 +1,6 @@
-import { FlowBuilder } from "@/components/flow/FlowBuilder";
-import { Toaster } from "@/components/ui/sonner";
-import { ThemeProvider } from "@/components/ThemeProvider";
+import { FlowBuilder } from '@/components/flow/FlowBuilder';
+import { Toaster } from '@/components/ui/sonner';
+import { ThemeProvider } from '@/components/ThemeProvider';
 
 function App() {
   return (
@@ -12,4 +12,3 @@ function App() {
 }
 
 export default App;
-
