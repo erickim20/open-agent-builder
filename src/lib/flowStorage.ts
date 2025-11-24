@@ -103,3 +103,39 @@ export function importFlowFromJSON(file: File): Promise<Flow> {
   });
 }
 
+const API_KEY_STORAGE_KEY = "open-agent-builder-openai-api-key";
+
+/**
+ * Save OpenAI API key to localStorage
+ */
+export function saveApiKeyToStorage(apiKey: string): void {
+  try {
+    localStorage.setItem(API_KEY_STORAGE_KEY, apiKey);
+  } catch (error) {
+    console.error("Failed to save API key to storage:", error);
+  }
+}
+
+/**
+ * Get OpenAI API key from localStorage
+ */
+export function getApiKeyFromStorage(): string | null {
+  try {
+    return localStorage.getItem(API_KEY_STORAGE_KEY);
+  } catch (error) {
+    console.error("Failed to load API key from storage:", error);
+    return null;
+  }
+}
+
+/**
+ * Delete OpenAI API key from localStorage
+ */
+export function deleteApiKeyFromStorage(): void {
+  try {
+    localStorage.removeItem(API_KEY_STORAGE_KEY);
+  } catch (error) {
+    console.error("Failed to delete API key from storage:", error);
+  }
+}
+

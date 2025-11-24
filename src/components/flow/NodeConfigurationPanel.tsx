@@ -20,7 +20,19 @@ interface NodeConfigurationPanelProps {
   onNodeDelete?: (nodeId: string) => void;
 }
 
-const AVAILABLE_MODELS = ['gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'gpt-4o-mini'];
+const AVAILABLE_MODELS = [
+  'gpt-5',
+  'gpt-5-mini',
+  'gpt-5-nano',
+  'gpt-4.1',
+  'gpt-4.1-mini',
+  'gpt-4.1-nano',
+  'gpt-4o',
+  'gpt-4-turbo',
+  'gpt-4',
+  'gpt-3.5-turbo',
+  'gpt-4o-mini'
+];
 
 export function NodeConfigurationPanel({
   node,

@@ -101,7 +101,7 @@ export function FlowSwitcher({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-6 w-6 p-0 hover:bg-destructive hover:text-destructive-foreground"
+                      className="h-6 w-6 p-0"
                       onClick={(e) => handleDeleteFlow(flow.id, e)}
                     >
                       <Trash2 className="h-3 w-3" />
