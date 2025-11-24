@@ -145,6 +145,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string; // ISO string for serialization
+  agentId?: string; // Only for assistant messages
 }
 
 export interface ChatHistory {
