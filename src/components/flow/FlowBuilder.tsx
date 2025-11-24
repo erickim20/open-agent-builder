@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button';
 import { FlowCanvas } from './FlowCanvas';
 import { NodeConfigurationPanel } from './NodeConfigurationPanel';
 import { FlowSwitcher } from './FlowSwitcher';
-import { RunFlowDialog } from './RunFlowDialog';
+import { ModeToggle } from './ModeToggle';
+import { PreviewChatPanel } from './PreviewChatPanel';
 import { ImportFlowDialog } from './ImportFlowDialog';
 import { ApiKeyDialog } from './ApiKeyDialog';
 import { AgentNodeCard } from './cards/AgentNodeCard';
@@ -18,7 +19,7 @@ import {
 } from '@/lib/flowStorage';
 import type { Flow, Node, AgentNode, EndNode, NotesNode } from '@/types/flow';
 import { toast } from 'sonner';
-import { Play, MoreHorizontal, Key } from 'lucide-react';
+import { MoreHorizontal, Key } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,9 +52,10 @@ export function FlowBuilder() {
     return saved || createDefaultFlow();
   });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [runDialogOpen, setRunDialogOpen] = useState(false);
+  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [apiKeyDialogOpen, setApiKeyDialogOpen] = useState(false);
+  const [streamingAgentIds, setStreamingAgentIds] = useState<Set<string>>(new Set());
 
   // Auto-save to localStorage
   useEffect(() => {
@@ -211,6 +213,17 @@ export function FlowBuilder() {
     }
   }, [flow]);
 
+  const handleNodeSelect = useCallback(
+    (nodeId: string | null) => {
+      // In preview mode, clicking a node switches back to edit mode
+      if (mode === 'preview' && nodeId) {
+        setMode('edit');
+      }
+      setSelectedNodeId(nodeId);
+    },
+    [mode]
+  );
+
   const selectedNode = flow.nodes.find((n) => n.id === selectedNodeId) || null;
 
   return (
@@ -225,6 +238,9 @@ export function FlowBuilder() {
               onNewFlow={handleNewFlow}
               onFlowNameChange={(name) => setFlow({ ...flow, name })}
             />
+          </div>
+          <div className="absolute left-1/2 -translate-x-1/2">
+            <ModeToggle mode={mode} onModeChange={setMode} />
           </div>
           <div className="flex items-center gap-2">
             <Button
@@ -252,10 +268,6 @@ export function FlowBuilder() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-
-            <Button onClick={() => setRunDialogOpen(true)} size="sm" className="h-9 w-9">
-              <Play className="h-4 w-4" />
-            </Button>
           </div>
         </div>
       </div>
@@ -267,41 +279,55 @@ export function FlowBuilder() {
           <FlowCanvas
             flow={flow}
             onFlowChange={handleFlowChange}
-            onNodeSelect={setSelectedNodeId}
+            onNodeSelect={handleNodeSelect}
             selectedNodeId={selectedNodeId}
             onNodeUpdate={handleNodeUpdate}
+            previewMode={mode === 'preview'}
+            streamingAgentIds={streamingAgentIds}
           />
         </div>
 
-        {/* Node types card */}
-        <div className="absolute left-4 top-4 w-80 overflow-y-auto rounded-xl bg-card">
-          <div className="p-2">
-            <h2 className="p-2 text-sm font-medium text-muted-foreground">Core</h2>
-            <div className="space-y-2">
-              <AgentNodeCard onClick={handleAddAgent} />
-              <EndNodeCard onClick={handleAddEnd} />
+        {mode === 'edit' ? (
+          <>
+            {/* Node types card */}
+            <div className="absolute left-4 top-4 w-80 overflow-y-auto rounded-xl bg-card">
+              <div className="p-2">
+                <h2 className="p-2 text-sm font-medium text-muted-foreground">Core</h2>
+                <div className="space-y-2">
+                  <AgentNodeCard onClick={handleAddAgent} />
+                  <EndNodeCard onClick={handleAddEnd} />
+                </div>
+                <h2 className="p-2 pt-4 text-sm font-medium text-muted-foreground">Tools</h2>
+                <div className="space-y-2">
+                  <NotesNodeCard onClick={handleAddNotes} />
+                </div>
+              </div>
             </div>
-            <h2 className="p-2 pt-4 text-sm font-medium text-muted-foreground">Tools</h2>
-            <div className="space-y-2">
-              <NotesNodeCard onClick={handleAddNotes} />
-            </div>
-          </div>
-        </div>
 
-        {/* Configuration panel */}
-        {selectedNode && (
-          <div className="absolute right-4 top-4 w-80 overflow-y-auto rounded-xl bg-card">
-            <NodeConfigurationPanel
-              node={selectedNode}
-              onNodeUpdate={handleNodeUpdate}
-              onNodeDelete={handleNodeDelete}
+            {/* Configuration panel */}
+            {selectedNode && (
+              <div className="absolute right-4 top-4 w-80 overflow-y-auto rounded-xl bg-card">
+                <NodeConfigurationPanel
+                  node={selectedNode}
+                  onNodeUpdate={handleNodeUpdate}
+                  onNodeDelete={handleNodeDelete}
+                />
+              </div>
+            )}
+          </>
+        ) : (
+          /* Preview chat panel */
+          <div className="absolute bottom-4 right-4 top-4 w-96 rounded-xl bg-card shadow-lg">
+            <PreviewChatPanel
+              flow={flow}
+              onNodeSelect={handleNodeSelect}
+              onStreamingAgentsChange={setStreamingAgentIds}
             />
           </div>
         )}
       </div>
 
       {/* Dialogs */}
-      <RunFlowDialog open={runDialogOpen} onOpenChange={setRunDialogOpen} flow={flow} />
       <ImportFlowDialog
         open={importDialogOpen}
         onOpenChange={setImportDialogOpen}

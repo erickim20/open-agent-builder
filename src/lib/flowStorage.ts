@@ -139,3 +139,80 @@ export function deleteApiKeyFromStorage(): void {
   }
 }
 
+// Chat History Types
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string; // ISO string for serialization
+}
+
+export interface ChatHistory {
+  id: string;
+  flowId: string;
+  name: string;
+  initialUserMessage: ChatMessage | null;
+  initialResponses: Record<string, ChatMessage>;
+  messages: Record<string, ChatMessage[]>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+const CHAT_HISTORIES_KEY_PREFIX = "open-agent-builder-chat-histories";
+
+/**
+ * Get storage key for chat histories of a specific flow
+ */
+function getChatHistoriesKey(flowId: string): string {
+  return `${CHAT_HISTORIES_KEY_PREFIX}-${flowId}`;
+}
+
+/**
+ * Get all chat histories for a flow
+ */
+export function getChatHistoriesFromStorage(flowId: string): ChatHistory[] {
+  try {
+    const data = localStorage.getItem(getChatHistoriesKey(flowId));
+    return data ? JSON.parse(data) : [];
+  } catch (error) {
+    console.error("Failed to load chat histories from storage:", error);
+    return [];
+  }
+}
+
+/**
+ * Save a chat history to localStorage
+ */
+export function saveChatHistoryToStorage(history: ChatHistory): void {
+  try {
+    const histories = getChatHistoriesFromStorage(history.flowId);
+    const existingIndex = histories.findIndex((h) => h.id === history.id);
+    
+    if (existingIndex >= 0) {
+      histories[existingIndex] = history;
+    } else {
+      histories.push(history);
+    }
+    
+    // Sort by updatedAt descending (most recent first)
+    histories.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+    
+    localStorage.setItem(getChatHistoriesKey(history.flowId), JSON.stringify(histories));
+  } catch (error) {
+    console.error("Failed to save chat history to storage:", error);
+  }
+}
+
+/**
+ * Delete a chat history from localStorage
+ */
+export function deleteChatHistoryFromStorage(flowId: string, historyId: string): void {
+  try {
+    const histories = getChatHistoriesFromStorage(flowId);
+    const filtered = histories.filter((h) => h.id !== historyId);
+    localStorage.setItem(getChatHistoriesKey(flowId), JSON.stringify(filtered));
+  } catch (error) {
+    console.error("Failed to delete chat history from storage:", error);
+  }
+}
+

@@ -19,6 +19,8 @@ interface FlowCanvasProps {
   onNodeSelect?: (nodeId: string | null) => void;
   selectedNodeId?: string | null;
   onNodeUpdate?: (node: Node) => void;
+  previewMode?: boolean;
+  streamingAgentIds?: Set<string>;
 }
 
 export function FlowCanvas({
@@ -26,7 +28,9 @@ export function FlowCanvas({
   onFlowChange,
   onNodeSelect,
   selectedNodeId,
-  onNodeUpdate
+  onNodeUpdate,
+  previewMode = false,
+  streamingAgentIds = new Set()
 }: FlowCanvasProps) {
   // Convert Flow nodes/edges to ReactFlow format
   const initialNodes: ReactFlowNode[] = useMemo(
@@ -38,11 +42,19 @@ export function FlowCanvas({
         data: {
           ...node,
           onNodeUpdate,
-          onNodeSelect
+          onNodeSelect,
+          previewMode,
+          isStreaming: node.type === 'agent' && streamingAgentIds.has(node.id)
         } as unknown as Record<string, unknown>,
-        selected: node.id === selectedNodeId
+        selected: node.id === selectedNodeId,
+        style: previewMode
+          ? {
+              opacity: 0.5,
+              filter: 'grayscale(100%)'
+            }
+          : undefined
       })),
-    [flow.nodes, selectedNodeId, onNodeUpdate, onNodeSelect]
+    [flow.nodes, selectedNodeId, onNodeUpdate, onNodeSelect, previewMode, streamingAgentIds]
   );
 
   const initialEdges: Edge[] = useMemo(
@@ -68,19 +80,46 @@ export function FlowCanvas({
         data: {
           ...node,
           onNodeUpdate,
-          onNodeSelect
+          onNodeSelect,
+          previewMode,
+          isStreaming: node.type === 'agent' && streamingAgentIds.has(node.id)
         } as unknown as Record<string, unknown>,
-        selected: node.id === selectedNodeId
+        selected: node.id === selectedNodeId,
+        style: previewMode
+          ? {
+              opacity: 0.5,
+              filter: 'grayscale(100%)'
+            }
+          : undefined
       }))
     );
     setEdges(
-      flow.edges.map((edge) => ({
-        id: edge.id,
-        source: edge.sourceNodeId,
-        target: edge.targetNodeId
-      }))
+      flow.edges.map((edge) => {
+        const sourceNode = flow.nodes.find((n) => n.id === edge.sourceNodeId);
+        const targetNode = flow.nodes.find((n) => n.id === edge.targetNodeId);
+        const isStreaming =
+          (sourceNode?.type === 'agent' && streamingAgentIds.has(edge.sourceNodeId)) ||
+          (targetNode?.type === 'agent' && streamingAgentIds.has(edge.targetNodeId));
+
+        return {
+          id: edge.id,
+          source: edge.sourceNodeId,
+          target: edge.targetNodeId,
+          style: previewMode
+            ? {
+                opacity: 0.3
+              }
+            : isStreaming
+              ? {
+                  stroke: 'hsl(var(--primary))',
+                  strokeWidth: 2.5
+                }
+              : undefined,
+          animated: isStreaming
+        };
+      })
     );
-  }, [flow, selectedNodeId, setNodes, setEdges, onNodeUpdate, onNodeSelect]);
+  }, [flow, selectedNodeId, setNodes, setEdges, onNodeUpdate, onNodeSelect, previewMode, streamingAgentIds]);
 
   const onConnect = useCallback(
     (params: Connection) => {
@@ -128,6 +167,7 @@ export function FlowCanvas({
 
   const onNodeClick = useCallback(
     (_event: React.MouseEvent, node: ReactFlowNode) => {
+      // In preview mode, allow clicking nodes to switch back to edit mode
       onNodeSelect?.(node.id);
     },
     [onNodeSelect]
@@ -196,12 +236,14 @@ export function FlowCanvas({
         edges={edges}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
+        onConnect={previewMode ? undefined : onConnect}
         onNodeClick={onNodeClick}
         onPaneClick={onPaneClick}
-        onNodesDelete={onNodesDelete}
-        onEdgesDelete={onEdgesDelete}
-        onNodeDragStop={onNodeDragStop}
+        onNodesDelete={previewMode ? undefined : onNodesDelete}
+        onEdgesDelete={previewMode ? undefined : onEdgesDelete}
+        onNodeDragStop={previewMode ? undefined : onNodeDragStop}
+        nodesDraggable={!previewMode}
+        nodesConnectable={!previewMode}
         nodeTypes={nodeTypes}
         connectionMode={ConnectionMode.Loose}
         fitView
