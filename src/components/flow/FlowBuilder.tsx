@@ -317,7 +317,7 @@ export function FlowBuilder() {
           </>
         ) : (
           /* Preview chat panel */
-          <div className="absolute bottom-4 right-4 top-4 w-96 rounded-xl bg-card shadow-lg">
+          <div className="absolute bottom-4 right-4 top-4 w-96 overflow-hidden rounded-xl bg-card">
             <PreviewChatPanel
               flow={flow}
               onNodeSelect={handleNodeSelect}

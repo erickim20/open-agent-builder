@@ -843,7 +843,7 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
                   >
                     <div
                       className={cn(
-                        'group relative flex max-w-[80%] flex-col gap-1 rounded-lg px-4 py-4',
+                        'group relative flex max-w-[80%] flex-col gap-1 rounded-xl p-3',
                         message.role === 'user'
                           ? 'bg-primary text-primary-foreground'
                           : 'bg-muted text-foreground'
@@ -897,7 +897,7 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
         </ScrollArea>
 
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-background to-transparent">
-          <div className="z-10 mx-4 mb-4 flex flex-col gap-2 rounded-xl border bg-card p-2 shadow-xl">
+          <div className="z-10 mx-4 mb-4 flex flex-col gap-2 rounded-xl bg-muted p-2">
             <div className="flex items-center gap-2 px-1">
               <Switch
                 id="send-to-all"
