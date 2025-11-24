@@ -1,3 +1,5 @@
+![Preview](public/preview.png)
+
 # Open Agent Builder
 
 A visual, no-code flow builder for creating and executing AI agent workflows. Build complex agent chains with an intuitive drag-and-drop interface, configure agent nodes with custom prompts and models, and execute flows seamlessly.
@@ -26,6 +28,7 @@ A visual, no-code flow builder for creating and executing AI agent workflows. Bu
 ### Core Components
 
 #### ✅ Completed
+
 - [x] **Agent** - AI agent node with configurable prompts and models
 - [x] **End** - Exit point for flows
 - [x] **Note** - Annotation/documentation nodes
@@ -33,20 +36,24 @@ A visual, no-code flow builder for creating and executing AI agent workflows. Bu
 #### 🚧 In Progress / Planned
 
 - [ ] **Classify** - Classification node for categorizing inputs
+
 ### Tools
 
 - [ ] **File Search** - Search and retrieve files from filesystem or storage
 - [ ] **Guardrails** - Content moderation and safety checks
 - [ ] **MCP (Model Context Protocol)** - Integration with MCP servers
+
 ### Logic Components
 
 - [ ] **If / Else** - Conditional branching logic
 - [ ] **While** - Loop/iteration node
 - [ ] **User Approval** - Human-in-the-loop approval step
+
 ### Data Components
 
 - [ ] **Transform** - Data transformation and manipulation
 - [ ] **Set State** - State management and variable assignment
+
 ### Multi-Model Support
 
 - [ ] **Multi-Model Agent Configuration**
