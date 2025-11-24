@@ -1,8 +1,9 @@
-![Preview](public/preview.png)
 
 # Open Agent Builder
 
 A visual, no-code flow builder for creating and executing AI agent workflows. Build complex agent chains with an intuitive drag-and-drop interface, configure agent nodes with custom prompts and models, and execute flows seamlessly.
+
+![Preview](public/preview.png)
 
 ## 🔗 Links
 
