@@ -82,6 +82,17 @@ export function validateFlow(flow: Flow): { valid: boolean; error?: string } {
 }
 
 /**
+ * Checks if an agent node is connected to an end node
+ */
+function isAgentConnectedToEnd(flow: Flow, agentId: string): boolean {
+  return flow.edges.some(
+    (edge) =>
+      edge.sourceNodeId === agentId &&
+      flow.nodes.some((n) => n.id === edge.targetNodeId && n.type === 'end')
+  );
+}
+
+/**
  * Executes a flow with the given input
  */
 export async function runFlow(flow: Flow, input: { prompt: string }): Promise<FlowRunResult> {
@@ -97,12 +108,15 @@ export async function runFlow(flow: Flow, input: { prompt: string }): Promise<Fl
 
   // Find all agents connected directly to start
   const startEdges = flow.edges.filter((e) => e.sourceNodeId === startNode.id);
-  const agentNodes = startEdges
+  const allAgentNodes = startEdges
     .map((edge) => flow.nodes.find((n) => n.id === edge.targetNodeId))
     .filter((n): n is AgentNode => n?.type === 'agent');
 
+  // Only execute agents that are connected to end nodes
+  const agentNodes = allAgentNodes.filter((agentNode) => isAgentConnectedToEnd(flow, agentNode.id));
+
   if (agentNodes.length === 0) {
-    throw new Error('No agent nodes connected to start');
+    throw new Error('No agent nodes connected to start and end nodes');
   }
 
   // Execute all agents in parallel

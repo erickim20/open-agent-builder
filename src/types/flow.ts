@@ -1,6 +1,6 @@
 // Core data models for the flow builder
 
-export type NodeType = "start" | "agent" | "end";
+export type NodeType = 'start' | 'agent' | 'end' | 'notes';
 
 export interface BaseNode {
   id: string;
@@ -10,14 +10,14 @@ export interface BaseNode {
 }
 
 export interface StartNode extends BaseNode {
-  type: "start";
+  type: 'start';
   inputSchema?: {
     prompt?: string;
   };
 }
 
 export interface AgentNode extends BaseNode {
-  type: "agent";
+  type: 'agent';
   model: string;
   systemPrompt: string;
   temperature: number;
@@ -25,10 +25,15 @@ export interface AgentNode extends BaseNode {
 }
 
 export interface EndNode extends BaseNode {
-  type: "end";
+  type: 'end';
 }
 
-export type Node = StartNode | AgentNode | EndNode;
+export interface NotesNode extends BaseNode {
+  type: 'notes';
+  content: string;
+}
+
+export type Node = StartNode | AgentNode | EndNode | NotesNode;
 
 export interface Edge {
   id: string;
@@ -56,5 +61,3 @@ export interface FlowRunResult {
   runId: string;
   agents: Record<string, AgentRunResult>;
 }
-
-
