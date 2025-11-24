@@ -1,6 +1,7 @@
-import { Handle, Position } from "@xyflow/react";
-import { Bot } from "lucide-react";
-import type { AgentNode as AgentNodeType } from "@/types/flow";
+import { Handle, Position } from '@xyflow/react';
+import { Bot } from 'lucide-react';
+import type { AgentNode as AgentNodeType } from '@/types/flow';
+import { cn } from '@/lib/utils';
 
 interface AgentNodeProps {
   data: AgentNodeType | Record<string, unknown>;
@@ -10,36 +11,28 @@ interface AgentNodeProps {
 export function AgentNode({ data, selected }: AgentNodeProps) {
   const nodeData = data as AgentNodeType;
   return (
-    <div
-      className={`rounded-lg border-2 bg-card p-4 shadow-md min-w-[200px] ${
-        selected ? "border-primary" : "border-border"
-      }`}
-    >
-      <div className="flex items-center gap-2 mb-2">
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10">
+    <div className={cn('rounded-xl bg-card p-2', selected && 'ring')}>
+      <div className="flex items-center gap-2">
+        <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
           <Bot className="h-4 w-4 text-primary" />
         </div>
-        <div className="flex-1">
-          <div className="font-semibold text-sm">{nodeData.label}</div>
-          <div className="text-xs text-muted-foreground">{nodeData.model}</div>
+        <div className="flex-1 pr-2">
+          <div className="text-sm font-semibold">{nodeData.label}</div>
+          {/* <div className="text-sm text-muted-foreground">
+            {nodeData.type[0].toUpperCase() + nodeData.type.slice(1)}
+          </div> */}
         </div>
       </div>
-      {nodeData.systemPrompt && (
-        <div className="text-xs text-muted-foreground mt-2 line-clamp-2">
-          {nodeData.systemPrompt}
-        </div>
-      )}
       <Handle
         type="target"
         position={Position.Top}
-        className="!bg-primary !border-2 !border-background !w-3 !h-3"
+        className="!h-3 !w-3 !border-2 !border-background !bg-primary"
       />
       <Handle
         type="source"
         position={Position.Bottom}
-        className="!bg-primary !border-2 !border-background !w-3 !h-3"
+        className="!h-3 !w-3 !border-2 !border-background !bg-primary"
       />
     </div>
   );
 }
-

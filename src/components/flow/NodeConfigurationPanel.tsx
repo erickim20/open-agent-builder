@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -11,15 +12,21 @@ import {
 } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import type { Node, StartNode, AgentNode, EndNode } from '@/types/flow';
+import { Trash2 } from 'lucide-react';
 
 interface NodeConfigurationPanelProps {
   node: Node | null;
   onNodeUpdate: (node: Node) => void;
+  onNodeDelete?: (nodeId: string) => void;
 }
 
 const AVAILABLE_MODELS = ['gpt-4o', 'gpt-4-turbo', 'gpt-4', 'gpt-3.5-turbo', 'gpt-4o-mini'];
 
-export function NodeConfigurationPanel({ node, onNodeUpdate }: NodeConfigurationPanelProps) {
+export function NodeConfigurationPanel({
+  node,
+  onNodeUpdate,
+  onNodeDelete
+}: NodeConfigurationPanelProps) {
   const [localNode, setLocalNode] = useState<Node | null>(node);
 
   useEffect(() => {
@@ -41,13 +48,26 @@ export function NodeConfigurationPanel({ node, onNodeUpdate }: NodeConfiguration
     const startNode = localNode as StartNode;
     return (
       <div className="space-y-4 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Start Node</h3>
+          {onNodeDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onNodeDelete(localNode.id)}
+              className="h-8 w-8 p-0"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <div>
           <Label htmlFor="start-label">Label</Label>
           <Input
             id="start-label"
             value={startNode.label}
             onChange={(e) => handleUpdate({ label: e.target.value })}
-            className="mt-1"
+            className="mt-1 bg-muted"
           />
         </div>
         <div>
@@ -62,7 +82,7 @@ export function NodeConfigurationPanel({ node, onNodeUpdate }: NodeConfiguration
                 }
               })
             }
-            className="mt-1"
+            className="mt-1 bg-muted"
             placeholder="Describe what input this flow expects..."
           />
         </div>
@@ -74,19 +94,32 @@ export function NodeConfigurationPanel({ node, onNodeUpdate }: NodeConfiguration
     const agentNode = localNode as AgentNode;
     return (
       <div className="space-y-4 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">Agent Node</h3>
+          {onNodeDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onNodeDelete(localNode.id)}
+              className="h-8 w-8 p-0"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <div>
           <Label htmlFor="agent-label">Label</Label>
           <Input
             id="agent-label"
             value={agentNode.label}
             onChange={(e) => handleUpdate({ label: e.target.value })}
-            className="mt-1"
+            className="mt-1 bg-muted"
           />
         </div>
         <div>
           <Label htmlFor="agent-model">Model</Label>
           <Select value={agentNode.model} onValueChange={(value) => handleUpdate({ model: value })}>
-            <SelectTrigger id="agent-model" className="mt-1">
+            <SelectTrigger id="agent-model" className="mt-1 bg-muted">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -104,7 +137,7 @@ export function NodeConfigurationPanel({ node, onNodeUpdate }: NodeConfiguration
             id="agent-system-prompt"
             value={agentNode.systemPrompt}
             onChange={(e) => handleUpdate({ systemPrompt: e.target.value })}
-            className="mt-1"
+            className="mt-1 bg-muted"
             rows={6}
             placeholder="Enter the system prompt for this agent..."
           />
@@ -128,7 +161,7 @@ export function NodeConfigurationPanel({ node, onNodeUpdate }: NodeConfiguration
             type="number"
             value={agentNode.maxTokens}
             onChange={(e) => handleUpdate({ maxTokens: parseInt(e.target.value) || 0 })}
-            className="mt-1"
+            className="mt-1 bg-muted"
             min={1}
             max={32000}
           />
@@ -141,13 +174,26 @@ export function NodeConfigurationPanel({ node, onNodeUpdate }: NodeConfiguration
     const endNode = localNode as EndNode;
     return (
       <div className="space-y-4 p-4">
+        <div className="flex items-center justify-between">
+          <h3 className="text-sm font-semibold">End Node</h3>
+          {onNodeDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onNodeDelete(localNode.id)}
+              className="h-8 w-8 p-0"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
         <div>
           <Label htmlFor="end-label">Label</Label>
           <Input
             id="end-label"
             value={endNode.label}
             onChange={(e) => handleUpdate({ label: e.target.value })}
-            className="mt-1"
+            className="mt-1 bg-muted"
           />
         </div>
       </div>

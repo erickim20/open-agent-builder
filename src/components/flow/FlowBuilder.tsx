@@ -1,46 +1,55 @@
-import { useState, useCallback, useEffect } from "react";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useCallback, useEffect } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
-import { FlowCanvas } from "./FlowCanvas";
-import { NodeConfigurationPanel } from "./NodeConfigurationPanel";
-import { runFlow } from "@/lib/runtime";
+  DialogTitle
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { FlowCanvas } from './FlowCanvas';
+import { NodeConfigurationPanel } from './NodeConfigurationPanel';
+import { FlowSwitcher } from './FlowSwitcher';
+import { runFlow } from '@/lib/runtime';
 import {
   saveFlowToStorage,
   getCurrentFlowFromStorage,
+  getFlowsFromStorage,
+  deleteFlowFromStorage,
   exportFlowAsJSON,
-  importFlowFromJSON,
-} from "@/lib/flowStorage";
-import type { Flow, Node, AgentNode, EndNode, FlowRunResult } from "@/types/flow";
-import { toast } from "sonner";
-import { Play, Plus, Download, Upload, FilePlus } from "lucide-react";
+  importFlowFromJSON
+} from '@/lib/flowStorage';
+import type { Flow, Node, AgentNode, EndNode, FlowRunResult } from '@/types/flow';
+import { toast } from 'sonner';
+import { Play, BotIcon, SquareIcon, MoreHorizontal, Trash2 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger
+} from '@/components/ui/dropdown-menu';
 
 function createDefaultFlow(): Flow {
   const startNode: Node = {
-    id: "start-1",
-    type: "start",
-    label: "Start",
+    id: 'start-1',
+    type: 'start',
+    label: 'Start',
     position: { x: 250, y: 50 },
     inputSchema: {
-      prompt: "",
-    },
+      prompt: ''
+    }
   };
 
   return {
     id: crypto.randomUUID(),
-    name: "New Flow",
+    name: 'New Flow',
     nodes: [startNode],
-    edges: [],
+    edges: []
   };
 }
 
@@ -51,7 +60,7 @@ export function FlowBuilder() {
   });
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [runDialogOpen, setRunDialogOpen] = useState(false);
-  const [runPrompt, setRunPrompt] = useState("");
+  const [runPrompt, setRunPrompt] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [runResult, setRunResult] = useState<FlowRunResult | null>(null);
   const [importDialogOpen, setImportDialogOpen] = useState(false);
@@ -67,55 +76,84 @@ export function FlowBuilder() {
 
   const handleNodeUpdate = useCallback(
     (updatedNode: Node) => {
-      const updatedNodes = flow.nodes.map((n) =>
-        n.id === updatedNode.id ? updatedNode : n
-      );
+      const updatedNodes = flow.nodes.map((n) => (n.id === updatedNode.id ? updatedNode : n));
       setFlow({ ...flow, nodes: updatedNodes });
     },
     [flow]
   );
 
+  const handleNodeDelete = useCallback(
+    (nodeId: string) => {
+      const nodeToDelete = flow.nodes.find((n) => n.id === nodeId);
+      if (!nodeToDelete) return;
+
+      // Prevent deleting the last Start node
+      if (nodeToDelete.type === 'start') {
+        const remainingStartNodes = flow.nodes.filter((n) => n.type === 'start' && n.id !== nodeId);
+        if (remainingStartNodes.length === 0) {
+          toast.error(
+            'Cannot delete the last Start node. A flow must have at least one Start node.'
+          );
+          return;
+        }
+      }
+
+      const updatedFlow: Flow = {
+        ...flow,
+        nodes: flow.nodes.filter((n) => n.id !== nodeId),
+        edges: flow.edges.filter((e) => e.sourceNodeId !== nodeId && e.targetNodeId !== nodeId)
+      };
+
+      setFlow(updatedFlow);
+      if (selectedNodeId === nodeId) {
+        setSelectedNodeId(null);
+      }
+      toast.success('Node deleted');
+    },
+    [flow, selectedNodeId]
+  );
+
   const handleAddAgent = useCallback(() => {
     const newAgent: AgentNode = {
       id: `agent-${crypto.randomUUID()}`,
-      type: "agent",
-      label: "New Agent",
+      type: 'agent',
+      label: 'New Agent',
       position: {
         x: Math.random() * 400 + 100,
-        y: Math.random() * 300 + 200,
+        y: Math.random() * 300 + 200
       },
-      model: "gpt-4o",
-      systemPrompt: "",
+      model: 'gpt-4o',
+      systemPrompt: '',
       temperature: 0.7,
-      maxTokens: 2000,
+      maxTokens: 2000
     };
 
     setFlow({
       ...flow,
-      nodes: [...flow.nodes, newAgent],
+      nodes: [...flow.nodes, newAgent]
     });
   }, [flow]);
 
   const handleAddEnd = useCallback(() => {
     const newEnd: EndNode = {
       id: `end-${crypto.randomUUID()}`,
-      type: "end",
-      label: "End",
+      type: 'end',
+      label: 'End',
       position: {
         x: Math.random() * 400 + 100,
-        y: Math.random() * 300 + 400,
-      },
+        y: Math.random() * 300 + 400
+      }
     };
 
     setFlow({
       ...flow,
-      nodes: [...flow.nodes, newEnd],
+      nodes: [...flow.nodes, newEnd]
     });
   }, [flow]);
 
   const handleRunFlow = useCallback(async () => {
     if (!runPrompt.trim()) {
-      toast.error("Please enter a prompt");
+      toast.error('Please enter a prompt');
       return;
     }
 
@@ -125,11 +163,9 @@ export function FlowBuilder() {
     try {
       const result = await runFlow(flow, { prompt: runPrompt });
       setRunResult(result);
-      toast.success("Flow executed successfully");
+      toast.success('Flow executed successfully');
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Failed to run flow"
-      );
+      toast.error(error instanceof Error ? error.message : 'Failed to run flow');
     } finally {
       setIsRunning(false);
     }
@@ -138,83 +174,104 @@ export function FlowBuilder() {
   const handleExport = useCallback(() => {
     try {
       exportFlowAsJSON(flow);
-      toast.success("Flow exported successfully");
-    } catch (error) {
-      toast.error("Failed to export flow");
+      toast.success('Flow exported successfully');
+    } catch {
+      toast.error('Failed to export flow');
     }
   }, [flow]);
 
-  const handleImport = useCallback(
-    async (file: File) => {
-      try {
-        const importedFlow = await importFlowFromJSON(file);
-        setFlow(importedFlow);
-        setSelectedNodeId(null);
-        toast.success("Flow imported successfully");
-        setImportDialogOpen(false);
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to import flow"
-        );
-      }
-    },
-    []
-  );
-
-  const handleNewFlow = useCallback(() => {
-    if (confirm("Create a new flow? Current flow will be saved automatically.")) {
-      const newFlow = createDefaultFlow();
-      setFlow(newFlow);
+  const handleImport = useCallback(async (file: File) => {
+    try {
+      const importedFlow = await importFlowFromJSON(file);
+      setFlow(importedFlow);
       setSelectedNodeId(null);
-      toast.success("New flow created");
+      toast.success('Flow imported successfully');
+      setImportDialogOpen(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to import flow');
     }
   }, []);
+
+  const handleNewFlow = useCallback(() => {
+    const newFlow = createDefaultFlow();
+    setFlow(newFlow);
+    setSelectedNodeId(null);
+    toast.success('New flow created');
+  }, []);
+
+  const handleFlowSelect = useCallback((selectedFlow: Flow) => {
+    setFlow(selectedFlow);
+    setSelectedNodeId(null);
+    toast.success(`Switched to "${selectedFlow.name}"`);
+  }, []);
+
+  const handleDeleteFlow = useCallback(() => {
+    const allFlows = getFlowsFromStorage();
+    if (allFlows.length <= 1) {
+      toast.error('Cannot delete the last flow');
+      return;
+    }
+
+    if (confirm(`Are you sure you want to delete "${flow.name}"?`)) {
+      deleteFlowFromStorage(flow.id);
+
+      // Switch to another flow
+      const remainingFlows = allFlows.filter((f) => f.id !== flow.id);
+      if (remainingFlows.length > 0) {
+        setFlow(remainingFlows[0]);
+        setSelectedNodeId(null);
+        toast.success(`Deleted "${flow.name}" and switched to "${remainingFlows[0].name}"`);
+      } else {
+        const newFlow = createDefaultFlow();
+        setFlow(newFlow);
+        setSelectedNodeId(null);
+        toast.success(`Deleted "${flow.name}"`);
+      }
+    }
+  }, [flow]);
 
   const selectedNode = flow.nodes.find((n) => n.id === selectedNodeId) || null;
 
   return (
     <div className="flex h-screen flex-col">
       {/* Toolbar */}
-      <div className="border-b bg-background px-4 py-2">
+      <div className="bg-muted px-4 py-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Input
-              value={flow.name}
-              onChange={(e) => setFlow({ ...flow, name: e.target.value })}
-              className="w-48 font-semibold"
+            <FlowSwitcher
+              currentFlow={flow}
+              onFlowSelect={handleFlowSelect}
+              onNewFlow={handleNewFlow}
+              onFlowNameChange={(name) => setFlow({ ...flow, name })}
             />
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={handleNewFlow} size="sm">
-              <FilePlus className="h-4 w-4 mr-2" />
-              New Flow
-            </Button>
-            <Button variant="outline" onClick={handleAddAgent} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Agent
-            </Button>
-            <Button variant="outline" onClick={handleAddEnd} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add End
-            </Button>
-            <Button variant="outline" onClick={() => setImportDialogOpen(true)} size="sm">
-              <Upload className="h-4 w-4 mr-2" />
-              Import
-            </Button>
-            <Button variant="outline" onClick={handleExport} size="sm">
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger>
+                <Button variant="secondary" size="sm">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent>
+                <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
+                  Import
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={handleExport}>Export</DropdownMenuItem>
+                <DropdownMenuItem onClick={handleDeleteFlow} className="text-destructive">
+                  Delete Flow
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+
             <Button onClick={() => setRunDialogOpen(true)} size="sm">
-              <Play className="h-4 w-4 mr-2" />
-              Run Flow
+              <Play className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </div>
 
       {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
+      <div className="relative flex flex-1 overflow-hidden">
         {/* Canvas */}
         <div className="flex-1">
           <FlowCanvas
@@ -225,20 +282,42 @@ export function FlowBuilder() {
           />
         </div>
 
-        {/* Configuration panel */}
-        <div className="w-80 border-l bg-background overflow-y-auto">
-          <Card className="border-0 rounded-none h-full">
-            <CardHeader>
-              <CardTitle>Node Configuration</CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <NodeConfigurationPanel
-                node={selectedNode}
-                onNodeUpdate={handleNodeUpdate}
-              />
-            </CardContent>
-          </Card>
+        <div className="absolute left-4 top-4 w-80 overflow-y-auto rounded-xl bg-card">
+          <div className="p-2">
+            <h2 className="p-2 text-sm font-medium text-muted-foreground">Core</h2>
+            <div className="space-y-2">
+              <div
+                onClick={handleAddAgent}
+                className="flex w-full items-center gap-2 rounded-xl p-2 transition-colors hover:bg-muted"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <BotIcon className="h-4 w-4 text-primary" />
+                </div>
+                Agent
+              </div>
+              <div
+                onClick={handleAddEnd}
+                className="flex w-full items-center gap-2 rounded-xl p-2 transition-colors hover:bg-muted"
+              >
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
+                  <SquareIcon className="h-4 w-4 text-primary" />
+                </div>
+                End
+              </div>
+            </div>
+          </div>
         </div>
+
+        {/* Configuration panel */}
+        {selectedNode && (
+          <div className="absolute right-4 top-4 w-80 overflow-y-auto rounded-xl bg-card">
+            <NodeConfigurationPanel
+              node={selectedNode}
+              onNodeUpdate={handleNodeUpdate}
+              onNodeDelete={handleNodeDelete}
+            />
+          </div>
+        )}
       </div>
 
       {/* Run Dialog */}
@@ -266,22 +345,16 @@ export function FlowBuilder() {
               <div className="space-y-2">
                 <Label>Results</Label>
                 {Object.entries(runResult.agents).map(([agentId, result]) => {
-                  const agentNode = flow.nodes.find(
-                    (n) => n.id === agentId
-                  ) as AgentNode;
+                  const agentNode = flow.nodes.find((n) => n.id === agentId) as AgentNode;
                   return (
                     <Card key={agentId}>
                       <CardHeader>
-                        <CardTitle className="text-sm">
-                          {agentNode?.label || agentId}
-                        </CardTitle>
+                        <CardTitle className="text-sm">{agentNode?.label || agentId}</CardTitle>
                       </CardHeader>
                       <CardContent>
-                        <div className="text-sm whitespace-pre-wrap">
-                          {result.output}
-                        </div>
+                        <div className="whitespace-pre-wrap text-sm">{result.output}</div>
                         {result.raw?.error && (
-                          <div className="text-sm text-destructive mt-2">
+                          <div className="mt-2 text-sm text-destructive">
                             Error: {result.raw.error}
                           </div>
                         )}
@@ -298,13 +371,13 @@ export function FlowBuilder() {
               onClick={() => {
                 setRunDialogOpen(false);
                 setRunResult(null);
-                setRunPrompt("");
+                setRunPrompt('');
               }}
             >
               Close
             </Button>
             <Button onClick={handleRunFlow} disabled={isRunning}>
-              {isRunning ? "Running..." : "Run"}
+              {isRunning ? 'Running...' : 'Run'}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -315,9 +388,7 @@ export function FlowBuilder() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Import Flow</DialogTitle>
-            <DialogDescription>
-              Select a JSON file to import a flow.
-            </DialogDescription>
+            <DialogDescription>Select a JSON file to import a flow.</DialogDescription>
           </DialogHeader>
           <div>
             <Input
@@ -332,10 +403,7 @@ export function FlowBuilder() {
             />
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setImportDialogOpen(false)}
-            >
+            <Button variant="outline" onClick={() => setImportDialogOpen(false)}>
               Cancel
             </Button>
           </DialogFooter>
@@ -344,4 +412,3 @@ export function FlowBuilder() {
     </div>
   );
 }
-

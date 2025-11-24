@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from 'react';
 import {
   ReactFlow,
   Background,
@@ -9,12 +9,12 @@ import {
   Connection,
   Edge,
   Node as ReactFlowNode,
-  ConnectionMode,
-} from "@xyflow/react";
-import "@xyflow/react/dist/style.css";
-import { toast } from "sonner";
-import { nodeTypes } from "./nodeTypes";
-import type { Flow, Node } from "@/types/flow";
+  ConnectionMode
+} from '@xyflow/react';
+import '@xyflow/react/dist/style.css';
+import { toast } from 'sonner';
+import { nodeTypes } from './nodeTypes';
+import type { Flow, Node } from '@/types/flow';
 
 interface FlowCanvasProps {
   flow: Flow;
@@ -23,12 +23,7 @@ interface FlowCanvasProps {
   selectedNodeId?: string | null;
 }
 
-export function FlowCanvas({
-  flow,
-  onFlowChange,
-  onNodeSelect,
-  selectedNodeId,
-}: FlowCanvasProps) {
+export function FlowCanvas({ flow, onFlowChange, onNodeSelect, selectedNodeId }: FlowCanvasProps) {
   // Convert Flow nodes/edges to ReactFlow format
   const initialNodes: ReactFlowNode[] = useMemo(
     () =>
@@ -37,7 +32,7 @@ export function FlowCanvas({
         type: node.type,
         position: node.position,
         data: node as unknown as Record<string, unknown>,
-        selected: node.id === selectedNodeId,
+        selected: node.id === selectedNodeId
       })),
     [flow.nodes, selectedNodeId]
   );
@@ -47,7 +42,7 @@ export function FlowCanvas({
       flow.edges.map((edge) => ({
         id: edge.id,
         source: edge.sourceNodeId,
-        target: edge.targetNodeId,
+        target: edge.targetNodeId
       })),
     [flow.edges]
   );
@@ -63,14 +58,14 @@ export function FlowCanvas({
         type: node.type,
         position: node.position,
         data: node as unknown as Record<string, unknown>,
-        selected: node.id === selectedNodeId,
+        selected: node.id === selectedNodeId
       }))
     );
     setEdges(
       flow.edges.map((edge) => ({
         id: edge.id,
         source: edge.sourceNodeId,
-        target: edge.targetNodeId,
+        target: edge.targetNodeId
       }))
     );
   }, [flow, selectedNodeId, setNodes, setEdges]);
@@ -87,8 +82,8 @@ export function FlowCanvas({
 
       // Only allow: start -> agent, agent -> end
       const isValidConnection =
-        (sourceNode.type === "start" && targetNode.type === "agent") ||
-        (sourceNode.type === "agent" && targetNode.type === "end");
+        (sourceNode.type === 'start' && targetNode.type === 'agent') ||
+        (sourceNode.type === 'agent' && targetNode.type === 'end');
 
       if (!isValidConnection) {
         toast.error(
@@ -100,12 +95,12 @@ export function FlowCanvas({
       const newEdge = {
         id: `edge-${params.source}-${params.target}`,
         sourceNodeId: params.source,
-        targetNodeId: params.target,
+        targetNodeId: params.target
       };
 
       const updatedFlow: Flow = {
         ...flow,
-        edges: [...flow.edges, newEdge],
+        edges: [...flow.edges, newEdge]
       };
 
       onFlowChange(updatedFlow);
@@ -127,23 +122,23 @@ export function FlowCanvas({
   const onNodesDelete = useCallback(
     (deleted: ReactFlowNode[]) => {
       const deletedIds = new Set(deleted.map((n) => n.id));
-      
+
       // Prevent deleting the last Start node
       const remainingStartNodes = flow.nodes.filter(
-        (n) => n.type === "start" && !deletedIds.has(n.id)
+        (n) => n.type === 'start' && !deletedIds.has(n.id)
       );
-      
+
       if (remainingStartNodes.length === 0) {
-        toast.error("Cannot delete the last Start node. A flow must have at least one Start node.");
+        toast.error('Cannot delete the last Start node. A flow must have at least one Start node.');
         return;
       }
-      
+
       const updatedFlow: Flow = {
         ...flow,
         nodes: flow.nodes.filter((n) => !deletedIds.has(n.id)),
         edges: flow.edges.filter(
           (e) => !deletedIds.has(e.sourceNodeId) && !deletedIds.has(e.targetNodeId)
-        ),
+        )
       };
       onFlowChange(updatedFlow);
     },
@@ -155,7 +150,7 @@ export function FlowCanvas({
       const deletedIds = new Set(deleted.map((e) => e.id));
       const updatedFlow: Flow = {
         ...flow,
-        edges: flow.edges.filter((e) => !deletedIds.has(e.id)),
+        edges: flow.edges.filter((e) => !deletedIds.has(e.id))
       };
       onFlowChange(updatedFlow);
     },
@@ -169,7 +164,7 @@ export function FlowCanvas({
       );
       const updatedFlow: Flow = {
         ...flow,
-        nodes: updatedNodes,
+        nodes: updatedNodes
       };
       onFlowChange(updatedFlow);
     },
@@ -177,7 +172,7 @@ export function FlowCanvas({
   );
 
   return (
-    <div className="h-full w-full">
+    <div className="h-full w-full bg-muted">
       <ReactFlow
         nodes={nodes}
         edges={edges}
@@ -193,11 +188,10 @@ export function FlowCanvas({
         connectionMode={ConnectionMode.Loose}
         fitView
       >
-        <Background />
-        <Controls />
-        <MiniMap />
+        {/* <Background /> */}
+        {/* <Controls />
+        <MiniMap /> */}
       </ReactFlow>
     </div>
   );
 }
-
