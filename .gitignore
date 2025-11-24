@@ -27,3 +27,6 @@ dist-ssr
 out
 build
 
+
+
+.env*
