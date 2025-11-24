@@ -9,7 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { streamAgent } from '@/lib/runtime';
 import type { Flow, AgentNode } from '@/types/flow';
-import { Send, ChevronDown, Copy, Check } from 'lucide-react';
+import { Send, ChevronDown, Copy, Check, BotIcon } from 'lucide-react';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { Textarea } from '../ui/textarea';
@@ -403,14 +403,16 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
 
   return (
     <div className="flex h-full flex-col overflow-hidden rounded-lg bg-card">
-      <div className="p-2">
+      <div className="flex items-center p-2">
+        <div>{/* History dropdown */}</div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="justify-between"
+              className="ml-auto justify-between"
               disabled={connectedAgents.length === 0}
             >
+              <BotIcon className="h-4 w-4" />
               <span>{selectedAgent?.label || 'Select agent'}</span>
               <ChevronDown className="h-4 w-4 opacity-50" />
             </Button>
