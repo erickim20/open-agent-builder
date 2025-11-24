@@ -21,6 +21,7 @@ export interface AgentNode extends BaseNode {
   model: string;
   systemPrompt: string;
   temperature: number;
+  effort?: number;
   maxTokens: number;
 }
 

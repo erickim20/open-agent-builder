@@ -39,6 +39,9 @@ export function AgentNodePanel({ node, onNodeUpdate, onNodeDelete }: AgentNodePa
     onNodeUpdate(updated);
   };
 
+  const isGPT5 = node.model.startsWith('gpt-5');
+  const effort = node.effort ?? 5;
+
   return (
     <div className="space-y-4 p-4">
       <div className="flex items-center justify-between">
@@ -94,18 +97,33 @@ export function AgentNodePanel({ node, onNodeUpdate, onNodeDelete }: AgentNodePa
           placeholder="Enter the system prompt for this agent..."
         />
       </div>
-      <div>
-        <Label htmlFor="agent-temperature">Temperature: {node.temperature.toFixed(2)}</Label>
-        <Slider
-          id="agent-temperature"
-          value={[node.temperature]}
-          onValueChange={([value]) => handleUpdate({ temperature: value })}
-          min={0}
-          max={2}
-          step={0.1}
-          className="mt-2"
-        />
-      </div>
+      {isGPT5 ? (
+        <div>
+          <Label htmlFor="agent-effort">Effort: {effort.toFixed(1)}</Label>
+          <Slider
+            id="agent-effort"
+            value={[effort]}
+            onValueChange={([value]) => handleUpdate({ effort: value })}
+            min={0}
+            max={10}
+            step={0.1}
+            className="mt-2"
+          />
+        </div>
+      ) : (
+        <div>
+          <Label htmlFor="agent-temperature">Temperature: {node.temperature.toFixed(2)}</Label>
+          <Slider
+            id="agent-temperature"
+            value={[node.temperature]}
+            onValueChange={([value]) => handleUpdate({ temperature: value })}
+            min={0}
+            max={2}
+            step={0.1}
+            className="mt-2"
+          />
+        </div>
+      )}
       <div>
         <Label htmlFor="agent-max-tokens">Max Tokens</Label>
         <Input
