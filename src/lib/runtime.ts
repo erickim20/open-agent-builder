@@ -62,7 +62,8 @@ async function streamOpenAI(
   userPrompt: string,
   temperature: number,
   maxTokens: number,
-  onChunk: (chunk: string) => void
+  onChunk: (chunk: string) => void,
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<string> {
   // Get API key from localStorage or fallback to env variable
   const apiKey = getApiKeyFromStorage();
@@ -82,12 +83,23 @@ async function streamOpenAI(
   // GPT-5 models use max_completion_tokens instead of max_tokens
   // GPT-5 models only support default temperature (1), so we don't include it
   const isGPT5 = model.startsWith('gpt-5');
+  
+  // Build messages array with conversation history
+  const messages: Array<{ role: string; content: string }> = [
+    { role: 'system', content: systemPrompt }
+  ];
+  
+  // Add conversation history if provided
+  if (conversationHistory && conversationHistory.length > 0) {
+    messages.push(...conversationHistory);
+  }
+  
+  // Add current user prompt
+  messages.push({ role: 'user', content: userPrompt });
+  
   const requestBody: Record<string, unknown> = {
     model,
-    messages: [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt }
-    ],
+    messages,
     stream: true
   };
 
@@ -330,7 +342,7 @@ export async function runAgent(
  */
 export async function streamAgent(
   agent: AgentNode,
-  input: { prompt: string },
+  input: { prompt: string; conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }> },
   onChunk: (chunk: string) => void
 ): Promise<AgentRunResult> {
   try {
@@ -340,7 +352,8 @@ export async function streamAgent(
       input.prompt,
       agent.temperature,
       agent.maxTokens,
-      onChunk
+      onChunk,
+      input.conversationHistory
     );
 
     return {

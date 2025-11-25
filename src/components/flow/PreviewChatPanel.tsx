@@ -105,6 +105,56 @@ function chatMessageToMessage(msg: ChatMessage): Message {
   };
 }
 
+/**
+ * Builds conversation history for a specific chain
+ * Returns an array of messages in chronological order (excluding the current message)
+ */
+function buildConversationHistory(
+  chain: string[],
+  initialUserMessage: Message | null,
+  initialResponses: Record<string, Message>,
+  messages: Record<string, Message[]>
+): Array<{ role: 'user' | 'assistant'; content: string }> {
+  const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
+  // Collect all messages from the chain in chronological order
+  const allMessages: Array<{ message: Message; timestamp: Date }> = [];
+
+  // Add initial user message if it exists
+  if (initialUserMessage) {
+    allMessages.push({ message: initialUserMessage, timestamp: initialUserMessage.timestamp });
+  }
+
+  // Add initial responses from chain agents
+  for (const agentId of chain) {
+    const initialResponse = initialResponses[agentId];
+    if (initialResponse) {
+      allMessages.push({ message: initialResponse, timestamp: initialResponse.timestamp });
+    }
+  }
+
+  // Add follow-up messages from chain agents
+  for (const agentId of chain) {
+    const agentMessages = messages[agentId] || [];
+    agentMessages.forEach((msg) => {
+      allMessages.push({ message: msg, timestamp: msg.timestamp });
+    });
+  }
+
+  // Sort by timestamp
+  allMessages.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime());
+
+  // Convert to conversation history format (exclude the last user message if it's the current one)
+  for (const { message } of allMessages) {
+    history.push({
+      role: message.role,
+      content: message.content
+    });
+  }
+
+  return history;
+}
+
 export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatPanelProps) {
   const connectedAgents = useMemo(() => getConnectedAgents(flow), [flow]);
   const [selectedAgentId, setSelectedAgentId] = useState<string | null>(
@@ -286,6 +336,23 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
     }
 
     if (sendToAllAgents) {
+      // Build conversation history BEFORE adding current message to state
+      const chains = findAgentChains(flow);
+      
+      // Build history for follow-up messages (before adding current message)
+      const conversationHistories: Record<string, Array<{ role: 'user' | 'assistant'; content: string }>> = {};
+      if (!isInitialMessage) {
+        chains.forEach((chain) => {
+          const chainKey = chain.join(',');
+          conversationHistories[chainKey] = buildConversationHistory(
+            chain,
+            initialUserMessage,
+            initialResponses,
+            messages
+          );
+        });
+      }
+      
       // User wants to send to all agents
       if (isInitialMessage) {
         // Set as shared initial message only if it's the first message
@@ -363,9 +430,12 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
       }
 
       // Stream to all chains (each chain sequentially, but chains in parallel)
-      const chains = findAgentChains(flow);
       const chainPromises = chains.map(async (chain) => {
         let currentInput = messageContent;
+        
+        // Get conversation history for this chain (built before adding current message)
+        const chainKey = chain.join(',');
+        const conversationHistory = isInitialMessage ? [] : (conversationHistories[chainKey] || []);
 
         // Execute each agent in the chain sequentially
         for (let i = 0; i < chain.length; i++) {
@@ -401,7 +471,11 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
 
           try {
             let fullOutput = '';
-            await streamAgent(agent, { prompt: currentInput }, (chunk: string) => {
+            // Pass conversation history only to the first agent in the chain
+            const agentInput = isFirstAgent
+              ? { prompt: currentInput, conversationHistory }
+              : { prompt: currentInput };
+            await streamAgent(agent, agentInput, (chunk: string) => {
               fullOutput += chunk;
               // Update the message content as chunks arrive
               if (isFirstAgent) {
@@ -521,6 +595,26 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
       }
     } else {
       // This is a follow-up message - execute the full chain for the selected agent
+      
+      // Find the chain that starts with the selected agent
+      const chains = findAgentChains(flow);
+      const chain = chains.find((c) => c[0] === selectedAgentId);
+
+      if (!chain) {
+        toast.error('No chain found for selected agent');
+        setIsLoading(false);
+        return;
+      }
+
+      // Build conversation history BEFORE adding current message to state
+      // Include all previous messages up to (but not including) the current user message
+      const conversationHistory = buildConversationHistory(
+        chain,
+        initialUserMessage,
+        initialResponses,
+        messages
+      );
+
       const userMessage: Message = {
         id: crypto.randomUUID(),
         role: 'user',
@@ -535,16 +629,6 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
 
       setInputValue('');
       setIsLoading(true);
-
-      // Find the chain that starts with the selected agent
-      const chains = findAgentChains(flow);
-      const chain = chains.find((c) => c[0] === selectedAgentId);
-
-      if (!chain) {
-        toast.error('No chain found for selected agent');
-        setIsLoading(false);
-        return;
-      }
 
       let currentInput = messageContent;
 
@@ -576,7 +660,11 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
 
         try {
           let fullOutput = '';
-          await streamAgent(chainAgent, { prompt: currentInput }, (chunk: string) => {
+          // Pass conversation history only to the first agent in the chain
+          const agentInput = isFirstAgent
+            ? { prompt: currentInput, conversationHistory }
+            : { prompt: currentInput };
+          await streamAgent(chainAgent, agentInput, (chunk: string) => {
             fullOutput += chunk;
             // Update the message content as chunks arrive
             setMessages((prev) => {
@@ -638,10 +726,12 @@ export function PreviewChatPanel({ flow, onStreamingAgentsChange }: PreviewChatP
     isLoading,
     connectedAgents,
     initialUserMessage,
+    initialResponses,
+    messages,
     sendToAllAgents,
     saveCurrentConversation,
     currentHistoryId,
-    flow.id
+    flow
   ]);
 
   const handleKeyDown = useCallback(
