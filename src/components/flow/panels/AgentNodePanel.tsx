@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -42,9 +43,31 @@ const AVAILABLE_MODELS = [
 ];
 
 export function AgentNodePanel({ node, onNodeUpdate, onNodeDelete }: AgentNodePanelProps) {
+  // Local state for text inputs to prevent cursor jumping
+  const [label, setLabel] = useState(node.label);
+  const [systemPrompt, setSystemPrompt] = useState(node.systemPrompt);
+
+  // Sync local state when node prop changes (e.g., when switching nodes)
+  useEffect(() => {
+    setLabel(node.label);
+    setSystemPrompt(node.systemPrompt);
+  }, [node.id, node.label, node.systemPrompt]);
+
   const handleUpdate = (updates: Partial<AgentNode>) => {
     const updated = { ...node, ...updates } as AgentNode;
     onNodeUpdate(updated);
+  };
+
+  const handleLabelBlur = () => {
+    if (label !== node.label) {
+      handleUpdate({ label });
+    }
+  };
+
+  const handleSystemPromptBlur = () => {
+    if (systemPrompt !== node.systemPrompt) {
+      handleUpdate({ systemPrompt });
+    }
   };
 
   const isGPT5 = node.model.startsWith('gpt-5');
@@ -81,8 +104,9 @@ export function AgentNodePanel({ node, onNodeUpdate, onNodeDelete }: AgentNodePa
         <Label htmlFor="agent-label">Label</Label>
         <Input
           id="agent-label"
-          value={node.label}
-          onChange={(e) => handleUpdate({ label: e.target.value })}
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          onBlur={handleLabelBlur}
           className="mt-1 bg-muted"
         />
       </div>
@@ -105,8 +129,9 @@ export function AgentNodePanel({ node, onNodeUpdate, onNodeDelete }: AgentNodePa
         <Label htmlFor="agent-system-prompt">System Prompt</Label>
         <Textarea
           id="agent-system-prompt"
-          value={node.systemPrompt}
-          onChange={(e) => handleUpdate({ systemPrompt: e.target.value })}
+          value={systemPrompt}
+          onChange={(e) => setSystemPrompt(e.target.value)}
+          onBlur={handleSystemPromptBlur}
           className="mt-1 bg-muted"
           rows={6}
           placeholder="Enter the system prompt for this agent..."
